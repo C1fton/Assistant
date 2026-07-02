@@ -10,9 +10,17 @@ import { toast } from 'sonner';
  * LLM设置模态框
  */
 export const LLMSettingModal = ({ open, onOpenChange }) => {
-  const [apiKey, setApiKey] = useState(localStorage.getItem('llm_api_key') || '');
-  const [baseUrl, setBaseUrl] = useState(localStorage.getItem('llm_base_url') || 'https://api.openai.com/v1');
-  const [model, setModel] = useState(localStorage.getItem('llm_model') || 'gpt-3.5-turbo');
+  const [apiKey, setApiKey] = useState(() =>
+    typeof window === 'undefined' ? '' : window.localStorage.getItem('llm_api_key') || ''
+  );
+  const [baseUrl, setBaseUrl] = useState(() =>
+    typeof window === 'undefined'
+      ? 'https://api.openai.com/v1'
+      : window.localStorage.getItem('llm_base_url') || 'https://api.openai.com/v1'
+  );
+  const [model, setModel] = useState(() =>
+    typeof window === 'undefined' ? 'gpt-3.5-turbo' : window.localStorage.getItem('llm_model') || 'gpt-3.5-turbo'
+  );
   const [saving, setSaving] = useState(false);
 
   const handleSave = () => {

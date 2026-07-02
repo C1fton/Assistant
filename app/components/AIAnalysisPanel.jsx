@@ -3,7 +3,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Brain, TrendingUp, Newspaper, AlertTriangle, RefreshCw, Settings, Loader2 } from 'lucide-react';
 import { useStorageStore } from '@/app/stores/storageStore';
 import { callLLM, renderPrompt, PROMPT_TEMPLATES } from '@/app/lib/llmService';
@@ -195,12 +194,12 @@ export const AIAnalysisPanel = () => {
 
             <div className="flex-1 overflow-y-auto">
               <TabsContent value="analysis" className="h-full mt-0">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>持仓智能分析</CardTitle>
-                    <CardDescription>全面分析你的持仓结构、风险分散情况、行业集中度等</CardDescription>
-                  </CardHeader>
-                  <CardContent>
+                <div className="ai-analysis-card">
+                  <div className="ai-analysis-card-header">
+                    <h3 className="ai-analysis-card-title">持仓智能分析</h3>
+                    <p className="ai-analysis-card-description">全面分析你的持仓结构、风险分散情况、行业集中度等</p>
+                  </div>
+                  <div className="ai-analysis-card-content">
                     <Button onClick={() => handleAnalyze('analysis')} disabled={loading} className="mb-4">
                       {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                       开始分析
@@ -208,17 +207,17 @@ export const AIAnalysisPanel = () => {
                     {result && activeTab === 'analysis' && (
                       <div className="p-4 bg-muted rounded-lg whitespace-pre-line text-sm">{result}</div>
                     )}
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               </TabsContent>
 
               <TabsContent value="recommendation" className="h-full mt-0">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>个性化基金推荐</CardTitle>
-                    <CardDescription>根据你的风险偏好和当前持仓，推荐合适的优质基金</CardDescription>
-                  </CardHeader>
-                  <CardContent>
+                <div className="ai-analysis-card">
+                  <div className="ai-analysis-card-header">
+                    <h3 className="ai-analysis-card-title">个性化基金推荐</h3>
+                    <p className="ai-analysis-card-description">根据你的风险偏好和当前持仓，推荐合适的优质基金</p>
+                  </div>
+                  <div className="ai-analysis-card-content">
                     <div className="mb-4 flex items-center gap-4">
                       <label className="text-sm font-medium">风险偏好:</label>
                       <Select value={riskPreference} onValueChange={setRiskPreference}>
@@ -239,17 +238,17 @@ export const AIAnalysisPanel = () => {
                     {result && activeTab === 'recommendation' && (
                       <div className="p-4 bg-muted rounded-lg whitespace-pre-line text-sm">{result}</div>
                     )}
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               </TabsContent>
 
               <TabsContent value="market" className="h-full mt-0">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>市场热点解读</CardTitle>
-                    <CardDescription>结合最新行情和新闻，分析市场趋势，给出操作建议</CardDescription>
-                  </CardHeader>
-                  <CardContent>
+                <div className="ai-analysis-card">
+                  <div className="ai-analysis-card-header">
+                    <h3 className="ai-analysis-card-title">市场热点解读</h3>
+                    <p className="ai-analysis-card-description">结合最新行情和新闻，分析市场趋势，给出操作建议</p>
+                  </div>
+                  <div className="ai-analysis-card-content">
                     <Button onClick={() => handleAnalyze('market')} disabled={loading} className="mb-4">
                       {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                       查看分析
@@ -257,17 +256,17 @@ export const AIAnalysisPanel = () => {
                     {result && activeTab === 'market' && (
                       <div className="p-4 bg-muted rounded-lg whitespace-pre-line text-sm">{result}</div>
                     )}
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               </TabsContent>
 
               <TabsContent value="risk" className="h-full mt-0">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>风险预警</CardTitle>
-                    <CardDescription>排查持仓潜在风险，提前提示利空消息和大幅波动风险</CardDescription>
-                  </CardHeader>
-                  <CardContent>
+                <div className="ai-analysis-card">
+                  <div className="ai-analysis-card-header">
+                    <h3 className="ai-analysis-card-title">风险预警</h3>
+                    <p className="ai-analysis-card-description">排查持仓潜在风险，提前提示利空消息和大幅波动风险</p>
+                  </div>
+                  <div className="ai-analysis-card-content">
                     <Button onClick={() => handleAnalyze('risk')} disabled={loading} className="mb-4">
                       {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                       风险检测
@@ -275,17 +274,17 @@ export const AIAnalysisPanel = () => {
                     {result && activeTab === 'risk' && (
                       <div className="p-4 bg-muted rounded-lg whitespace-pre-line text-sm">{result}</div>
                     )}
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               </TabsContent>
 
               <TabsContent value="rebalance" className="h-full mt-0">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>调仓建议</CardTitle>
-                    <CardDescription>根据当前市场情况和持仓结构，给出具体的调仓优化建议</CardDescription>
-                  </CardHeader>
-                  <CardContent>
+                <div className="ai-analysis-card">
+                  <div className="ai-analysis-card-header">
+                    <h3 className="ai-analysis-card-title">调仓建议</h3>
+                    <p className="ai-analysis-card-description">根据当前市场情况和持仓结构，给出具体的调仓优化建议</p>
+                  </div>
+                  <div className="ai-analysis-card-content">
                     <Button onClick={() => handleAnalyze('rebalance')} disabled={loading} className="mb-4">
                       {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                       获取建议
@@ -293,8 +292,8 @@ export const AIAnalysisPanel = () => {
                     {result && activeTab === 'rebalance' && (
                       <div className="p-4 bg-muted rounded-lg whitespace-pre-line text-sm">{result}</div>
                     )}
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               </TabsContent>
             </div>
           </Tabs>
