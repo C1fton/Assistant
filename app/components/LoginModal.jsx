@@ -8,6 +8,11 @@ import { MailIcon } from './Icons';
 import githubImg from '../assets/github.svg';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
+const getAuthRedirectTo = () => {
+  if (typeof window === 'undefined') return undefined;
+  return `${window.location.origin}/Assistant/`;
+};
+
 export default function LoginModal({ onClose, showToast, isExplicitLoginRef, initialError = '' }) {
   const isMobile = useIsMobile();
   const [loginEmail, setLoginEmail] = useState('');
@@ -49,7 +54,8 @@ export default function LoginModal({ onClose, showToast, isExplicitLoginRef, ini
       const { error } = await supabase.auth.signInWithOtp({
         email: loginEmail.trim(),
         options: {
-          shouldCreateUser: true
+          shouldCreateUser: true,
+          emailRedirectTo: getAuthRedirectTo()
         }
       });
       if (error) throw error;
@@ -112,7 +118,7 @@ export default function LoginModal({ onClose, showToast, isExplicitLoginRef, ini
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'github',
         options: {
-          redirectTo: window.location.origin
+          redirectTo: getAuthRedirectTo()
         }
       });
       if (error) throw error;

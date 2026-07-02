@@ -4586,7 +4586,7 @@ export default function HomePage() {
                   alt="项目Github地址"
                   src={githubImg}
                   style={{ width: '30px', height: '30px', cursor: 'pointer' }}
-                  onClick={() => window.open('https://github.com/hzm0321/real-time-fund')}
+                  onClick={() => window.open('https://github.com/C1fton/Assistant')}
                 />
               </span>
               {isMobile && (
