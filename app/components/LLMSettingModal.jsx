@@ -76,7 +76,9 @@ export const LLMSettingModal = ({ open, onOpenChange }) => {
           </div>
         </div>
         <DialogFooter>
-          <Button variant="secondary" onClick={() => onOpenChange(false)}>取消</Button>
+          <Button variant="secondary" onClick={() => onOpenChange(false)}>
+            取消
+          </Button>
           <Button onClick={handleSave} disabled={saving || !apiKey.trim()}>
             {saving ? '保存中...' : '保存'}
           </Button>

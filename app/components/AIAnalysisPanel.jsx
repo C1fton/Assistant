@@ -28,7 +28,7 @@ export const AIAnalysisPanel = () => {
 
   // 格式化持仓数据，传给LLM
   const formatHoldingsData = () => {
-    const fundMap = new Map(funds.map(f => [f.code, f]));
+    const fundMap = new Map(funds.map((f) => [f.code, f]));
     const holdingList = Object.entries(holdings).map(([code, holding]) => {
       const fund = fundMap.get(code);
       return {
@@ -47,38 +47,46 @@ export const AIAnalysisPanel = () => {
 
     // 计算总持仓金额和各基金占比
     const totalAmount = holdingList.reduce((sum, item) => sum + item.holdingAmount, 0);
-    const holdingsWithRatio = holdingList.map(item => ({
+    const holdingsWithRatio = holdingList.map((item) => ({
       ...item,
       ratio: totalAmount > 0 ? ((item.holdingAmount / totalAmount) * 100).toFixed(2) + '%' : '0%'
     }));
 
-    return JSON.stringify({
-      totalAmount,
-      fundCount: holdingList.length,
-      groupCount: groups.length,
-      holdings: holdingsWithRatio
-    }, null, 2);
+    return JSON.stringify(
+      {
+        totalAmount,
+        fundCount: holdingList.length,
+        groupCount: groups.length,
+        holdings: holdingsWithRatio
+      },
+      null,
+      2
+    );
   };
 
   // 获取模拟市场数据（后续可以接入真实的市场行情API）
   const getMarketData = () => {
-    return JSON.stringify({
-      date: new Date().toLocaleDateString(),
-      shIndex: '3200.56',
-      shChange: '+1.23%',
-      szIndex: '11800.34',
-      szChange: '+0.87%',
-      cyIndex: '2450.78',
-      cyChange: '+1.56%',
-      hotSectors: ['AI人工智能', '半导体', '新能源', '医药生物', '消费'],
-      fallingSectors: ['房地产', '金融', '煤炭'],
-      marketNews: [
-        '央行降准0.5个百分点，释放长期资金约1万亿元',
-        'AI大模型应用加速落地，相关产业链受益',
-        '新能源行业产能出清，龙头企业估值修复',
-        '医药集采政策边际改善，创新药板块反弹'
-      ]
-    }, null, 2);
+    return JSON.stringify(
+      {
+        date: new Date().toLocaleDateString(),
+        shIndex: '3200.56',
+        shChange: '+1.23%',
+        szIndex: '11800.34',
+        szChange: '+0.87%',
+        cyIndex: '2450.78',
+        cyChange: '+1.56%',
+        hotSectors: ['AI人工智能', '半导体', '新能源', '医药生物', '消费'],
+        fallingSectors: ['房地产', '金融', '煤炭'],
+        marketNews: [
+          '央行降准0.5个百分点，释放长期资金约1万亿元',
+          'AI大模型应用加速落地，相关产业链受益',
+          '新能源行业产能出清，龙头企业估值修复',
+          '医药集采政策边际改善，创新药板块反弹'
+        ]
+      },
+      null,
+      2
+    );
   };
 
   // 执行分析
@@ -105,9 +113,12 @@ export const AIAnalysisPanel = () => {
         case 'recommendation':
           prompt = renderPrompt(PROMPT_TEMPLATES.fundRecommendation, {
             holdingsData,
-            riskPreference: riskPreference === 'conservative' ? '保守型：追求稳健收益，风险承受能力低' :
-              riskPreference === 'moderate' ? '平衡型：追求收益和风险平衡，风险承受能力中等' :
-                '激进型：追求高收益，能承受较大波动'
+            riskPreference:
+              riskPreference === 'conservative'
+                ? '保守型：追求稳健收益，风险承受能力低'
+                : riskPreference === 'moderate'
+                  ? '平衡型：追求收益和风险平衡，风险承受能力中等'
+                  : '激进型：追求高收益，能承受较大波动'
           });
           break;
         case 'market':
@@ -139,12 +150,7 @@ export const AIAnalysisPanel = () => {
   return (
     <>
       {/* 入口按钮 */}
-      <Button
-        variant="secondary"
-        size="sm"
-        onClick={() => setOpen(true)}
-        className="flex items-center gap-2"
-      >
+      <Button variant="secondary" size="sm" onClick={() => setOpen(true)} className="flex items-center gap-2">
         <Brain className="h-4 w-4" />
         <span>AI智能分析</span>
       </Button>
@@ -160,9 +166,7 @@ export const AIAnalysisPanel = () => {
                 配置
               </Button>
             </DialogTitle>
-            <DialogDescription>
-              基于你的持仓数据和最新市场情况，提供专业的投资分析和建议
-            </DialogDescription>
+            <DialogDescription>基于你的持仓数据和最新市场情况，提供专业的投资分析和建议</DialogDescription>
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 overflow-hidden flex flex-col">
@@ -194,9 +198,7 @@ export const AIAnalysisPanel = () => {
                 <Card>
                   <CardHeader>
                     <CardTitle>持仓智能分析</CardTitle>
-                    <CardDescription>
-                      全面分析你的持仓结构、风险分散情况、行业集中度等
-                    </CardDescription>
+                    <CardDescription>全面分析你的持仓结构、风险分散情况、行业集中度等</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <Button onClick={() => handleAnalyze('analysis')} disabled={loading} className="mb-4">
@@ -204,9 +206,7 @@ export const AIAnalysisPanel = () => {
                       开始分析
                     </Button>
                     {result && activeTab === 'analysis' && (
-                      <div className="p-4 bg-muted rounded-lg whitespace-pre-line text-sm">
-                        {result}
-                      </div>
+                      <div className="p-4 bg-muted rounded-lg whitespace-pre-line text-sm">{result}</div>
                     )}
                   </CardContent>
                 </Card>
@@ -216,9 +216,7 @@ export const AIAnalysisPanel = () => {
                 <Card>
                   <CardHeader>
                     <CardTitle>个性化基金推荐</CardTitle>
-                    <CardDescription>
-                      根据你的风险偏好和当前持仓，推荐合适的优质基金
-                    </CardDescription>
+                    <CardDescription>根据你的风险偏好和当前持仓，推荐合适的优质基金</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="mb-4 flex items-center gap-4">
@@ -239,9 +237,7 @@ export const AIAnalysisPanel = () => {
                       获取推荐
                     </Button>
                     {result && activeTab === 'recommendation' && (
-                      <div className="p-4 bg-muted rounded-lg whitespace-pre-line text-sm">
-                        {result}
-                      </div>
+                      <div className="p-4 bg-muted rounded-lg whitespace-pre-line text-sm">{result}</div>
                     )}
                   </CardContent>
                 </Card>
@@ -251,9 +247,7 @@ export const AIAnalysisPanel = () => {
                 <Card>
                   <CardHeader>
                     <CardTitle>市场热点解读</CardTitle>
-                    <CardDescription>
-                      结合最新行情和新闻，分析市场趋势，给出操作建议
-                    </CardDescription>
+                    <CardDescription>结合最新行情和新闻，分析市场趋势，给出操作建议</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <Button onClick={() => handleAnalyze('market')} disabled={loading} className="mb-4">
@@ -261,9 +255,7 @@ export const AIAnalysisPanel = () => {
                       查看分析
                     </Button>
                     {result && activeTab === 'market' && (
-                      <div className="p-4 bg-muted rounded-lg whitespace-pre-line text-sm">
-                        {result}
-                      </div>
+                      <div className="p-4 bg-muted rounded-lg whitespace-pre-line text-sm">{result}</div>
                     )}
                   </CardContent>
                 </Card>
@@ -273,9 +265,7 @@ export const AIAnalysisPanel = () => {
                 <Card>
                   <CardHeader>
                     <CardTitle>风险预警</CardTitle>
-                    <CardDescription>
-                      排查持仓潜在风险，提前提示利空消息和大幅波动风险
-                    </CardDescription>
+                    <CardDescription>排查持仓潜在风险，提前提示利空消息和大幅波动风险</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <Button onClick={() => handleAnalyze('risk')} disabled={loading} className="mb-4">
@@ -283,9 +273,7 @@ export const AIAnalysisPanel = () => {
                       风险检测
                     </Button>
                     {result && activeTab === 'risk' && (
-                      <div className="p-4 bg-muted rounded-lg whitespace-pre-line text-sm">
-                        {result}
-                      </div>
+                      <div className="p-4 bg-muted rounded-lg whitespace-pre-line text-sm">{result}</div>
                     )}
                   </CardContent>
                 </Card>
@@ -295,9 +283,7 @@ export const AIAnalysisPanel = () => {
                 <Card>
                   <CardHeader>
                     <CardTitle>调仓建议</CardTitle>
-                    <CardDescription>
-                      根据当前市场情况和持仓结构，给出具体的调仓优化建议
-                    </CardDescription>
+                    <CardDescription>根据当前市场情况和持仓结构，给出具体的调仓优化建议</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <Button onClick={() => handleAnalyze('rebalance')} disabled={loading} className="mb-4">
@@ -305,9 +291,7 @@ export const AIAnalysisPanel = () => {
                       获取建议
                     </Button>
                     {result && activeTab === 'rebalance' && (
-                      <div className="p-4 bg-muted rounded-lg whitespace-pre-line text-sm">
-                        {result}
-                      </div>
+                      <div className="p-4 bg-muted rounded-lg whitespace-pre-line text-sm">{result}</div>
                     )}
                   </CardContent>
                 </Card>
