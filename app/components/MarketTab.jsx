@@ -17,10 +17,9 @@ import {
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useReactTable, getCoreRowModel, flexRender } from '@tanstack/react-table';
-import { fetchFundValuationRanking, fetchFundPeriodReturns } from '../api/fund';
+import { fetchFundValuationRanking, fetchFundPeriodReturns, fetchMarketSectors } from '../api/fund';
 import { cn } from '@/lib/utils';
 import { useStorageStore, useUserStore, useModalStore } from '../stores';
-import { supabase } from '../lib/supabase';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Empty, EmptyTitle, EmptyDescription, EmptyContent, EmptyMedia } from '@/components/ui/empty';
 import { Button } from '@/components/ui/button';
@@ -106,17 +105,7 @@ export default function MarketTab({ onAddFund, getFundCardProps, isActive }) {
   // Queries for Hot Sectors (Supabase)
   const { data: sectorEstimates, isLoading: sectorsLoading } = useQuery({
     queryKey: ['hotSectors'],
-    queryFn: async () => {
-      try {
-        if (!supabase) return [];
-        const { data, error } = await supabase.from('fund_topic').select('*');
-        if (error) throw error;
-        return data || [];
-      } catch (e) {
-        console.error('Fetch hot sectors error:', e);
-        return [];
-      }
-    },
+    queryFn: fetchMarketSectors,
     enabled: !!isActive,
     staleTime: 120000
   });

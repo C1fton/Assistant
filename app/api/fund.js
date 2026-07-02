@@ -67,6 +67,25 @@ const fundSecidsInflight = new Map(); // key = label -> { promise, resolve }
 const fundSecidsQueue = new Set(); // Set(label)
 let fundSecidsTimeout = null;
 
+let staticFundSectorMapPromise = null;
+
+const loadStaticFundSectorMap = async () => {
+  if (staticFundSectorMapPromise) return staticFundSectorMapPromise;
+  if (typeof fetch === 'undefined' || typeof document === 'undefined') {
+    return { fundRelated: {}, sectorSecids: {} };
+  }
+
+  staticFundSectorMapPromise = fetch(new URL('data/fund-sector-map.json', document.baseURI).toString())
+    .then((response) => (response.ok ? response.json() : null))
+    .then((data) => ({
+      fundRelated: isObject(data?.fundRelated) ? data.fundRelated : {},
+      sectorSecids: isObject(data?.sectorSecids) ? data.sectorSecids : {}
+    }))
+    .catch(() => ({ fundRelated: {}, sectorSecids: {} }));
+
+  return staticFundSectorMapPromise;
+};
+
 const processRelatedSectorsQueue = async () => {
   if (relatedSectorsQueue.size === 0) return;
 
@@ -78,42 +97,36 @@ const processRelatedSectorsQueue = async () => {
     const missingCodes = Array.from(codesSet);
     if (missingCodes.length === 0) continue;
 
-    try {
-      const { data, error } = await withRetry(() =>
-        supabase.from('fund_related').select('fund_code, related_sector').in('fund_code', missingCodes)
-      );
-
-      if (error) throw error;
-
-      const foundMap = new Map();
-      if (isArray(data)) {
-        data.forEach((item) => {
-          const c = String(item.fund_code).trim();
-          const v = item.related_sector != null ? String(item.related_sector).trim() : '';
-          foundMap.set(c, v);
-        });
+    let data = [];
+    if (isSupabaseConfigured) {
+      try {
+        const response = await withRetry(() =>
+          supabase.from('fund_related').select('fund_code, related_sector').in('fund_code', missingCodes)
+        );
+        if (!response.error && isArray(response.data)) data = response.data;
+      } catch {
+        data = [];
       }
+    }
 
-      const qc = getQueryClient();
-      for (const code of missingCodes) {
-        const value = foundMap.get(code) || '';
-        qc.setQueryData(qk.relatedSectors(code, seg), value, { staleTime: ONE_DAY_MS });
+    const foundMap = new Map();
+    data.forEach((item) => {
+      const c = String(item.fund_code).trim();
+      const v = item.related_sector != null ? String(item.related_sector).trim() : '';
+      foundMap.set(c, v);
+    });
+    const staticMap = await loadStaticFundSectorMap();
 
-        const key = `${code}|${seg}`;
-        const resolver = relatedSectorsInflight.get(key);
-        if (resolver) {
-          resolver.resolve(value);
-          relatedSectorsInflight.delete(key);
-        }
-      }
-    } catch (e) {
-      for (const code of missingCodes) {
-        const key = `${code}|${seg}`;
-        const resolver = relatedSectorsInflight.get(key);
-        if (resolver) {
-          resolver.resolve('');
-          relatedSectorsInflight.delete(key);
-        }
+    const qc = getQueryClient();
+    for (const code of missingCodes) {
+      const value = foundMap.get(code) || staticMap.fundRelated[code] || '';
+      qc.setQueryData(qk.relatedSectors(code, seg), value, { staleTime: ONE_DAY_MS });
+
+      const key = `${code}|${seg}`;
+      const resolver = relatedSectorsInflight.get(key);
+      if (resolver) {
+        resolver.resolve(value);
+        relatedSectorsInflight.delete(key);
       }
     }
   }
@@ -126,40 +139,35 @@ const processFundSecidsQueue = async () => {
   fundSecidsQueue.clear();
   fundSecidsTimeout = null;
 
-  try {
-    const { data, error } = await withRetry(() =>
-      supabase.from('fund_secid').select('related_sector, secid').in('related_sector', missingLabels)
-    );
-
-    if (error) throw error;
-
-    const foundMap = new Map();
-    if (isArray(data)) {
-      data.forEach((item) => {
-        const l = String(item.related_sector).trim();
-        const s = item.secid != null ? String(item.secid).trim() : '';
-        foundMap.set(l, s);
-      });
+  let data = [];
+  if (isSupabaseConfigured) {
+    try {
+      const response = await withRetry(() =>
+        supabase.from('fund_secid').select('related_sector, secid').in('related_sector', missingLabels)
+      );
+      if (!response.error && isArray(response.data)) data = response.data;
+    } catch {
+      data = [];
     }
+  }
 
-    const qc = getQueryClient();
-    for (const label of missingLabels) {
-      const value = foundMap.get(label) || '';
-      qc.setQueryData(qk.fundSecid(label), value, { staleTime: ONE_DAY_MS });
+  const foundMap = new Map();
+  data.forEach((item) => {
+    const l = String(item.related_sector).trim();
+    const s = item.secid != null ? String(item.secid).trim() : '';
+    foundMap.set(l, s);
+  });
+  const staticMap = await loadStaticFundSectorMap();
 
-      const resolver = fundSecidsInflight.get(label);
-      if (resolver) {
-        resolver.resolve(value);
-        fundSecidsInflight.delete(label);
-      }
-    }
-  } catch (e) {
-    for (const label of missingLabels) {
-      const resolver = fundSecidsInflight.get(label);
-      if (resolver) {
-        resolver.resolve('');
-        fundSecidsInflight.delete(label);
-      }
+  const qc = getQueryClient();
+  for (const label of missingLabels) {
+    const value = foundMap.get(label) || staticMap.sectorSecids[label] || '';
+    qc.setQueryData(qk.fundSecid(label), value, { staleTime: ONE_DAY_MS });
+
+    const resolver = fundSecidsInflight.get(label);
+    if (resolver) {
+      resolver.resolve(value);
+      fundSecidsInflight.delete(label);
     }
   }
 };
@@ -170,7 +178,6 @@ const processFundSecidsQueue = async () => {
  */
 export const fetchRelatedSectorsBatch = async (codes, { cacheTime = ONE_DAY_MS, authSegment = 'anon' } = {}) => {
   if (!isArray(codes) || codes.length === 0) return {};
-  if (!isSupabaseConfigured) return {};
 
   const seg = authSegment != null && authSegment !== '' ? String(authSegment) : 'anon';
   const qc = getQueryClient();
@@ -238,7 +245,6 @@ const SECTOR_QUOTE_CACHE_MS = 60 * 1000;
  */
 export const fetchFundSecidsBatch = async (labels, { cacheTime = ONE_DAY_MS } = {}) => {
   if (!isArray(labels) || labels.length === 0) return {};
-  if (!isSupabaseConfigured) return {};
 
   const qc = getQueryClient();
   const results = {};
@@ -1100,8 +1106,7 @@ const SOURCE_NAME_TO_ID = { fundgz: 1, sina_ds2: 2, sina_ds3: 3, supabase_qdii: 
 
 // 原项目公开部署使用的只读最佳源映射。优先读取当前项目 Supabase；仅在当前项目
 // 未初始化 fund_pingzhongdata/get_fund_best_source 时回退，保证复刻版本的估值口径一致。
-const REFERENCE_BEST_SOURCE_RPC =
-  'https://mouvsqlmgymsaxikvqsh.supabase.co/rest/v1/rpc/get_fund_best_source';
+const REFERENCE_BEST_SOURCE_RPC = 'https://mouvsqlmgymsaxikvqsh.supabase.co/rest/v1/rpc/get_fund_best_source';
 const REFERENCE_BEST_SOURCE_KEY = 'sb_publishable_c5f58knbVz8UgOh6L88MUQ_p9j8c1Q-';
 
 const normalizeBestSourceMap = (data) => {
@@ -1229,7 +1234,7 @@ export async function fetchFundValuationBySource(code, dataSource = 1) {
   // 数据源 4：Supabase gs_qdii 表
   if (ds === 4) {
     const qdii = await fetchQdiiValuationFromSupabase(c);
-    if (!qdii) throw new Error('gs_qdii no data');
+    if (!qdii) return fetchFundValuationBySource(c, 1);
     return {
       code: c,
       ...qdii,
@@ -2436,21 +2441,113 @@ export const parseFundTextWithLLM = async (text) => {
  * @param {number} pageSize 每页条数
  * @returns {Promise<{Data: {list: Array, allRecords: number}} | null>}
  */
+const fetchJsonp = (rawUrl, callbackParam = 'callback', timeoutMs = 10000) => {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return Promise.resolve(null);
+
+  return new Promise((resolve) => {
+    const callbackName = `assistant_jsonp_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+    const url = new URL(rawUrl);
+    url.searchParams.set(callbackParam, callbackName);
+
+    const script = document.createElement('script');
+    let timer = null;
+    const cleanup = () => {
+      if (timer) clearTimeout(timer);
+      try {
+        delete window[callbackName];
+      } catch {}
+      if (document.body?.contains(script)) document.body.removeChild(script);
+    };
+
+    window[callbackName] = (data) => {
+      cleanup();
+      resolve(data || null);
+    };
+    timer = setTimeout(() => {
+      cleanup();
+      resolve(null);
+    }, timeoutMs);
+    script.onerror = () => {
+      cleanup();
+      resolve(null);
+    };
+    script.src = url.toString();
+    script.async = true;
+    document.body.appendChild(script);
+  });
+};
+
+const fetchMarketSectorList = async (typeCode, sectorType) => {
+  if (typeof fetch === 'undefined') return [];
+  const params = new URLSearchParams({
+    pn: '1',
+    pz: '500',
+    po: '1',
+    np: '1',
+    fltt: '2',
+    invt: '2',
+    fid: 'f3',
+    fs: `m:90+t:${typeCode}`,
+    fields: 'f12,f14,f3,f62'
+  });
+  const response = await fetch(`https://push2delay.eastmoney.com/api/qt/clist/get?${params.toString()}`);
+  if (!response.ok) return [];
+  const payload = await response.json();
+  const rows = payload?.data?.diff;
+  if (!isArray(rows)) return [];
+
+  return rows.map((item) => ({
+    id: `${sectorType}-${item.f12}`,
+    sector_id: item.f12 != null ? String(item.f12) : '',
+    sector_name: item.f14 != null ? String(item.f14) : '',
+    sector_type: sectorType,
+    change_pct: item.f3 != null && Number.isFinite(Number(item.f3)) ? Number(item.f3) : 0,
+    net_inflow: item.f62 != null && Number.isFinite(Number(item.f62)) ? Number(item.f62) : 0
+  }));
+};
+
+export const fetchMarketSectors = async () => {
+  const qc = getQueryClient();
+  return qc.fetchQuery({
+    queryKey: ['market-sector-list'],
+    queryFn: async () => {
+      const [industries, concepts] = await Promise.all([
+        fetchMarketSectorList(2, 'industry').catch(() => []),
+        fetchMarketSectorList(3, 'concept').catch(() => [])
+      ]);
+      return [...industries, ...concepts];
+    },
+    staleTime: 2 * 60 * 1000
+  });
+};
+
 export const fetchFundValuationRanking = async (sort = 3, order = 'desc', page = 1, pageSize = 20) => {
-  if (!isSupabaseConfigured) return null;
-  if (!supabase?.functions?.invoke) return null;
+  if (isSupabaseConfigured && supabase?.functions?.invoke) {
+    try {
+      const { data, error } = await withRetry(() =>
+        supabase.functions.invoke('fund-valuation-ranking', {
+          body: { sort, order, page, pageSize }
+        })
+      );
+      if (!error && data?.success === true && data.data) return { Data: data.data };
+    } catch {
+      // 未部署 Edge Function 时继续使用公开 JSONP 接口。
+    }
+  }
 
-  const { data, error } = await withRetry(() =>
-    supabase.functions.invoke('fund-valuation-ranking', {
-      body: { sort, order, page, pageSize }
-    })
+  const params = new URLSearchParams({
+    type: '1',
+    sort: String(sort),
+    orderType: order,
+    canbuy: '0',
+    pageIndex: String(page),
+    pageSize: String(pageSize)
+  });
+  const data = await fetchJsonp(
+    `https://api.fund.eastmoney.com/FundGuZhi/GetFundGZList?${params.toString()}`,
+    'callback'
   );
-
-  if (error) throw new Error(error.message || '加载估值排行失败');
-  if (!data || data.success !== true) throw new Error(data?.error || '加载估值排行失败');
-
-  // 保持与原 JSONP 返回结构一致：{ Data: { list: [...], ... } }
-  return { Data: data.data };
+  return data?.Data ? data : null;
 };
 
 /**

@@ -6,8 +6,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Brain, TrendingUp, Newspaper, AlertTriangle, RefreshCw, Settings, Loader2 } from 'lucide-react';
 import { storageStore, useStorageStore } from '@/app/stores/storageStore';
+import { useModalStore } from '@/app/stores/modalStore';
 import { callLLM, renderPrompt, PROMPT_TEMPLATES } from '@/app/lib/llmService';
-import { LLMSettingModal } from './LLMSettingModal';
 import { toast } from 'sonner';
 
 const renderInlineMarkdown = (text) => {
@@ -168,9 +168,24 @@ const getSavedAIResults = () => {
 /**
  * 智能分析主组件
  */
-export const AIAnalysisPanel = () => {
-  const [open, setOpen] = useState(false);
-  const [settingOpen, setSettingOpen] = useState(false);
+export const AIAnalysisTrigger = () => (
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <button
+        className="icon-button"
+        aria-label="AI智能投顾"
+        onClick={() => useModalStore.setState({ aiAnalysisOpen: true })}
+      >
+        <Brain width="18" height="18" />
+      </button>
+    </TooltipTrigger>
+    <TooltipContent>
+      <p>AI智能投顾</p>
+    </TooltipContent>
+  </Tooltip>
+);
+
+export const AIAnalysisPanel = ({ open, onOpenChange }) => {
   const [activeTab, setActiveTab] = useState('analysis');
   const [loadingType, setLoadingType] = useState('');
   const [results, setResults] = useState(() => ({ ...AI_RESULT_DEFAULTS, ...(getSavedAIResults() || {}) }));
@@ -320,7 +335,7 @@ export const AIAnalysisPanel = () => {
     const apiKey = storageStore.getItem('llm_api_key');
     if (!apiKey) {
       toast.error('请先配置LLM API密钥');
-      setSettingOpen(true);
+      useModalStore.setState({ llmSettingOpen: true });
       return;
     }
 
@@ -377,156 +392,139 @@ export const AIAnalysisPanel = () => {
   };
 
   return (
-    <>
-      {/* 入口按钮 */}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button className="icon-button" aria-label="AI智能投顾" onClick={() => setOpen(true)}>
-            <Brain width="18" height="18" />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>AI智能投顾</p>
-        </TooltipContent>
-      </Tooltip>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[800px] max-h-[80vh] overflow-hidden flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center justify-between">
+            <span>AI智能投顾</span>
+            <Button variant="ghost" size="sm" onClick={() => useModalStore.setState({ llmSettingOpen: true })}>
+              <Settings className="h-4 w-4 mr-2" />
+              配置
+            </Button>
+          </DialogTitle>
+          <DialogDescription>基于你的持仓数据和最新市场情况，提供专业的投资分析和建议</DialogDescription>
+        </DialogHeader>
 
-      {/* 分析模态框 */}
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-[800px] max-h-[80vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center justify-between">
-              <span>AI智能投顾</span>
-              <Button variant="ghost" size="sm" onClick={() => setSettingOpen(true)}>
-                <Settings className="h-4 w-4 mr-2" />
-                配置
-              </Button>
-            </DialogTitle>
-            <DialogDescription>基于你的持仓数据和最新市场情况，提供专业的投资分析和建议</DialogDescription>
-          </DialogHeader>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 overflow-hidden flex flex-col">
+          <TabsList className="grid grid-cols-5 mb-4">
+            <TabsTrigger value="analysis" className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" />
+              <span className="hidden sm:inline">持仓分析</span>
+            </TabsTrigger>
+            <TabsTrigger value="recommendation" className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" />
+              <span className="hidden sm:inline">基金推荐</span>
+            </TabsTrigger>
+            <TabsTrigger value="market" className="flex items-center gap-2">
+              <Newspaper className="h-4 w-4" />
+              <span className="hidden sm:inline">市场解读</span>
+            </TabsTrigger>
+            <TabsTrigger value="risk" className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" />
+              <span className="hidden sm:inline">风险预警</span>
+            </TabsTrigger>
+            <TabsTrigger value="rebalance" className="flex items-center gap-2">
+              <RefreshCw className="h-4 w-4" />
+              <span className="hidden sm:inline">调仓建议</span>
+            </TabsTrigger>
+          </TabsList>
 
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 overflow-hidden flex flex-col">
-            <TabsList className="grid grid-cols-5 mb-4">
-              <TabsTrigger value="analysis" className="flex items-center gap-2">
-                <TrendingUp className="h-4 w-4" />
-                <span className="hidden sm:inline">持仓分析</span>
-              </TabsTrigger>
-              <TabsTrigger value="recommendation" className="flex items-center gap-2">
-                <TrendingUp className="h-4 w-4" />
-                <span className="hidden sm:inline">基金推荐</span>
-              </TabsTrigger>
-              <TabsTrigger value="market" className="flex items-center gap-2">
-                <Newspaper className="h-4 w-4" />
-                <span className="hidden sm:inline">市场解读</span>
-              </TabsTrigger>
-              <TabsTrigger value="risk" className="flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4" />
-                <span className="hidden sm:inline">风险预警</span>
-              </TabsTrigger>
-              <TabsTrigger value="rebalance" className="flex items-center gap-2">
-                <RefreshCw className="h-4 w-4" />
-                <span className="hidden sm:inline">调仓建议</span>
-              </TabsTrigger>
-            </TabsList>
-
-            <div className="flex-1 overflow-y-auto">
-              <TabsContent value="analysis" className="h-full mt-0">
-                <div className="ai-analysis-card">
-                  <div className="ai-analysis-card-header">
-                    <h3 className="ai-analysis-card-title">持仓智能分析</h3>
-                    <p className="ai-analysis-card-description">全面分析你的持仓结构、风险分散情况、行业集中度等</p>
-                  </div>
-                  <div className="ai-analysis-card-content">
-                    <Button onClick={() => handleAnalyze('analysis')} disabled={!!loadingType} className="mb-4">
-                      {loadingType === 'analysis' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                      开始分析
-                    </Button>
-                    <AnalysisResult content={results.analysis} />
-                  </div>
+          <div className="flex-1 overflow-y-auto">
+            <TabsContent value="analysis" className="h-full mt-0">
+              <div className="ai-analysis-card">
+                <div className="ai-analysis-card-header">
+                  <h3 className="ai-analysis-card-title">持仓智能分析</h3>
+                  <p className="ai-analysis-card-description">全面分析你的持仓结构、风险分散情况、行业集中度等</p>
                 </div>
-              </TabsContent>
-
-              <TabsContent value="recommendation" className="h-full mt-0">
-                <div className="ai-analysis-card">
-                  <div className="ai-analysis-card-header">
-                    <h3 className="ai-analysis-card-title">个性化基金推荐</h3>
-                    <p className="ai-analysis-card-description">根据你的风险偏好和当前持仓，推荐合适的优质基金</p>
-                  </div>
-                  <div className="ai-analysis-card-content">
-                    <div className="mb-4 flex items-center gap-4">
-                      <label className="text-sm font-medium">风险偏好:</label>
-                      <Select value={riskPreference} onValueChange={setRiskPreference}>
-                        <SelectTrigger className="w-[180px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="conservative">保守型</SelectItem>
-                          <SelectItem value="moderate">平衡型</SelectItem>
-                          <SelectItem value="aggressive">激进型</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <Button onClick={() => handleAnalyze('recommendation')} disabled={!!loadingType} className="mb-4">
-                      {loadingType === 'recommendation' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                      获取推荐
-                    </Button>
-                    <AnalysisResult content={results.recommendation} />
-                  </div>
+                <div className="ai-analysis-card-content">
+                  <Button onClick={() => handleAnalyze('analysis')} disabled={!!loadingType} className="mb-4">
+                    {loadingType === 'analysis' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                    开始分析
+                  </Button>
+                  <AnalysisResult content={results.analysis} />
                 </div>
-              </TabsContent>
+              </div>
+            </TabsContent>
 
-              <TabsContent value="market" className="h-full mt-0">
-                <div className="ai-analysis-card">
-                  <div className="ai-analysis-card-header">
-                    <h3 className="ai-analysis-card-title">市场热点解读</h3>
-                    <p className="ai-analysis-card-description">结合最新行情和新闻，分析市场趋势，给出操作建议</p>
-                  </div>
-                  <div className="ai-analysis-card-content">
-                    <Button onClick={() => handleAnalyze('market')} disabled={!!loadingType} className="mb-4">
-                      {loadingType === 'market' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                      查看分析
-                    </Button>
-                    <AnalysisResult content={results.market} />
-                  </div>
+            <TabsContent value="recommendation" className="h-full mt-0">
+              <div className="ai-analysis-card">
+                <div className="ai-analysis-card-header">
+                  <h3 className="ai-analysis-card-title">个性化基金推荐</h3>
+                  <p className="ai-analysis-card-description">根据你的风险偏好和当前持仓，推荐合适的优质基金</p>
                 </div>
-              </TabsContent>
-
-              <TabsContent value="risk" className="h-full mt-0">
-                <div className="ai-analysis-card">
-                  <div className="ai-analysis-card-header">
-                    <h3 className="ai-analysis-card-title">风险预警</h3>
-                    <p className="ai-analysis-card-description">排查持仓潜在风险，提前提示利空消息和大幅波动风险</p>
+                <div className="ai-analysis-card-content">
+                  <div className="mb-4 flex items-center gap-4">
+                    <label className="text-sm font-medium">风险偏好:</label>
+                    <Select value={riskPreference} onValueChange={setRiskPreference}>
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="conservative">保守型</SelectItem>
+                        <SelectItem value="moderate">平衡型</SelectItem>
+                        <SelectItem value="aggressive">激进型</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <div className="ai-analysis-card-content">
-                    <Button onClick={() => handleAnalyze('risk')} disabled={!!loadingType} className="mb-4">
-                      {loadingType === 'risk' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                      风险检测
-                    </Button>
-                    <AnalysisResult content={results.risk} />
-                  </div>
+                  <Button onClick={() => handleAnalyze('recommendation')} disabled={!!loadingType} className="mb-4">
+                    {loadingType === 'recommendation' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                    获取推荐
+                  </Button>
+                  <AnalysisResult content={results.recommendation} />
                 </div>
-              </TabsContent>
+              </div>
+            </TabsContent>
 
-              <TabsContent value="rebalance" className="h-full mt-0">
-                <div className="ai-analysis-card">
-                  <div className="ai-analysis-card-header">
-                    <h3 className="ai-analysis-card-title">调仓建议</h3>
-                    <p className="ai-analysis-card-description">根据当前市场情况和持仓结构，给出具体的调仓优化建议</p>
-                  </div>
-                  <div className="ai-analysis-card-content">
-                    <Button onClick={() => handleAnalyze('rebalance')} disabled={!!loadingType} className="mb-4">
-                      {loadingType === 'rebalance' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                      获取建议
-                    </Button>
-                    <AnalysisResult content={results.rebalance} />
-                  </div>
+            <TabsContent value="market" className="h-full mt-0">
+              <div className="ai-analysis-card">
+                <div className="ai-analysis-card-header">
+                  <h3 className="ai-analysis-card-title">市场热点解读</h3>
+                  <p className="ai-analysis-card-description">结合最新行情和新闻，分析市场趋势，给出操作建议</p>
                 </div>
-              </TabsContent>
-            </div>
-          </Tabs>
-        </DialogContent>
-      </Dialog>
+                <div className="ai-analysis-card-content">
+                  <Button onClick={() => handleAnalyze('market')} disabled={!!loadingType} className="mb-4">
+                    {loadingType === 'market' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                    查看分析
+                  </Button>
+                  <AnalysisResult content={results.market} />
+                </div>
+              </div>
+            </TabsContent>
 
-      <LLMSettingModal open={settingOpen} onOpenChange={setSettingOpen} />
-    </>
+            <TabsContent value="risk" className="h-full mt-0">
+              <div className="ai-analysis-card">
+                <div className="ai-analysis-card-header">
+                  <h3 className="ai-analysis-card-title">风险预警</h3>
+                  <p className="ai-analysis-card-description">排查持仓潜在风险，提前提示利空消息和大幅波动风险</p>
+                </div>
+                <div className="ai-analysis-card-content">
+                  <Button onClick={() => handleAnalyze('risk')} disabled={!!loadingType} className="mb-4">
+                    {loadingType === 'risk' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                    风险检测
+                  </Button>
+                  <AnalysisResult content={results.risk} />
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="rebalance" className="h-full mt-0">
+              <div className="ai-analysis-card">
+                <div className="ai-analysis-card-header">
+                  <h3 className="ai-analysis-card-title">调仓建议</h3>
+                  <p className="ai-analysis-card-description">根据当前市场情况和持仓结构，给出具体的调仓优化建议</p>
+                </div>
+                <div className="ai-analysis-card-content">
+                  <Button onClick={() => handleAnalyze('rebalance')} disabled={!!loadingType} className="mb-4">
+                    {loadingType === 'rebalance' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                    获取建议
+                  </Button>
+                  <AnalysisResult content={results.rebalance} />
+                </div>
+              </div>
+            </TabsContent>
+          </div>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
   );
 };

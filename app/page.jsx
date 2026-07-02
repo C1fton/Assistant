@@ -31,7 +31,7 @@ import GroupAccountSummaryCard from './components/GroupAccountSummaryCard';
 import { CloseIcon, GridIcon, ListIcon, MoonIcon, PlusIcon, SettingsIcon, SortIcon, SunIcon } from './components/Icons';
 import UserMenu from './components/UserMenu';
 import RefreshButton from './components/RefreshButton';
-import { AIAnalysisPanel } from './components/AIAnalysisPanel';
+import { AIAnalysisTrigger } from './components/AIAnalysisPanel';
 const UpdateChecker = dynamic(() => import('./components/UpdateChecker'), { ssr: false });
 import MarketIndexAccordion from './components/MarketIndexAccordion';
 import githubImg from './assets/github.svg';
@@ -4535,7 +4535,7 @@ export default function HomePage() {
                   <p>{isSyncing ? '正在同步到云端...' : undefined}</p>
                 </TooltipContent>
               </Tooltip>
-                <span>Assistant</span>
+              <span>Assistant</span>
             </div>
             <div
               className={`glass add-fund-section navbar-add-fund ${isSearchFocused || selectedFunds.length > 0 ? 'search-focused' : ''}`}
@@ -4615,7 +4615,7 @@ export default function HomePage() {
                 fundsLength={funds.length}
                 refreshCycleStartRef={refreshCycleStartRef}
               />
-              <AIAnalysisPanel />
+              {isMobile && <AIAnalysisTrigger />}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button

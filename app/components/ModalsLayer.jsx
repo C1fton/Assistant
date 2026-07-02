@@ -23,6 +23,8 @@ const ScanProgressModal = dynamic(() => import('./ScanProgressModal'), { ssr: fa
 const AddHistoryModal = dynamic(() => import('./AddHistoryModal'), { ssr: false });
 const AllSectorsModal = dynamic(() => import('./AllSectorsModal'), { ssr: false });
 const DividendMethodModal = dynamic(() => import('./DividendMethodModal'), { ssr: false });
+const AIAnalysisPanel = dynamic(() => import('./AIAnalysisPanel').then((mod) => mod.AIAnalysisPanel), { ssr: false });
+const LLMSettingModal = dynamic(() => import('./LLMSettingModal').then((mod) => mod.LLMSettingModal), { ssr: false });
 
 // 高频组件：同步加载
 import ConfirmModal from './ConfirmModal';
@@ -92,6 +94,8 @@ function ModalsLayerContent({ callbacksRef }) {
   const mobileTableSettingModalOpen = useModalStore((s) => s.mobileTableSettingModalOpen);
   const sortSettingOpen = useModalStore((s) => s.sortSettingOpen);
   const allSectorsModalOpen = useModalStore((s) => s.allSectorsModalOpen);
+  const aiAnalysisOpen = useModalStore((s) => s.aiAnalysisOpen);
+  const llmSettingOpen = useModalStore((s) => s.llmSettingOpen);
   const groupModalOpen = useModalStore((s) => s.groupModalOpen);
   const groupManageOpen = useModalStore((s) => s.groupManageOpen);
   const addFundToGroupOpen = useModalStore((s) => s.addFundToGroupOpen);
@@ -145,6 +149,8 @@ function ModalsLayerContent({ callbacksRef }) {
   const setUpdateLogOpen = (v) => _ms({ updateLogOpen: isFunction(v) ? v(_gs().updateLogOpen) : v });
   const setSortSettingOpen = (v) => _ms({ sortSettingOpen: isFunction(v) ? v(_gs().sortSettingOpen) : v });
   const setAllSectorsModalOpen = (v) => _ms({ allSectorsModalOpen: isFunction(v) ? v(_gs().allSectorsModalOpen) : v });
+  const setAiAnalysisOpen = (v) => _ms({ aiAnalysisOpen: isFunction(v) ? v(_gs().aiAnalysisOpen) : v });
+  const setLlmSettingOpen = (v) => _ms({ llmSettingOpen: isFunction(v) ? v(_gs().llmSettingOpen) : v });
   const setGroupModalOpen = (v) => _ms({ groupModalOpen: isFunction(v) ? v(_gs().groupModalOpen) : v });
   const setGroupManageOpen = (v) => _ms({ groupManageOpen: isFunction(v) ? v(_gs().groupManageOpen) : v });
   const setAddFundToGroupOpen = (v) => _ms({ addFundToGroupOpen: isFunction(v) ? v(_gs().addFundToGroupOpen) : v });
@@ -311,6 +317,12 @@ function ModalsLayerContent({ callbacksRef }) {
       <AnimatePresence>
         {allSectorsModalOpen && <AllSectorsModal onClose={() => setAllSectorsModalOpen(false)} />}
       </AnimatePresence>
+
+      {/* ===== Modal: AI 智能投顾 ===== */}
+      {aiAnalysisOpen && <AIAnalysisPanel open onOpenChange={setAiAnalysisOpen} />}
+
+      {/* ===== Modal: LLM 配置 ===== */}
+      {llmSettingOpen && <LLMSettingModal open onOpenChange={setLlmSettingOpen} />}
 
       {/* ===== Modal: 添加基金到分组 ===== */}
       <AnimatePresence>

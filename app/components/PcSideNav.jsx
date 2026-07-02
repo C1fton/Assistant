@@ -2,18 +2,21 @@
 
 import { useEffect, useState } from 'react';
 import { motion, LayoutGroup, useReducedMotion } from 'framer-motion';
-import { Home, TrendingUp, ChevronRight } from 'lucide-react';
+import { Home, TrendingUp, ChevronRight, Brain } from 'lucide-react';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { useModalStore } from '../stores';
 
 const TABS = [
   { id: 'home', label: '首页', Icon: Home },
-  { id: 'market', label: '行情', Icon: TrendingUp }
+  { id: 'market', label: '行情', Icon: TrendingUp },
+  { id: 'ai', label: 'AI建议', Icon: Brain, isAction: true }
 ];
 
 export default function PcSideNav({ value, onChange }) {
   const [mounted, setMounted] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const isMobile = useIsMobile();
+  const aiAnalysisOpen = useModalStore((s) => s.aiAnalysisOpen);
   const reduceMotion = useReducedMotion();
 
   useEffect(() => setMounted(true), []);
@@ -36,14 +39,17 @@ export default function PcSideNav({ value, onChange }) {
         </div>
         <div className="pc-side-nav-content">
           <LayoutGroup id="pc-side-nav-group">
-            {TABS.map(({ id, label, Icon }) => {
-              const active = value === id;
+            {TABS.map(({ id, label, Icon, isAction }) => {
+              const active = isAction ? aiAnalysisOpen : value === id && !aiAnalysisOpen;
               return (
                 <button
                   key={id}
                   type="button"
                   className={`pc-side-nav-item ${active ? 'is-active' : ''}`}
-                  onClick={() => onChange(id)}
+                  onClick={() => {
+                    if (isAction) useModalStore.setState({ aiAnalysisOpen: true });
+                    else onChange(id);
+                  }}
                   aria-current={active ? 'page' : undefined}
                 >
                   {active && (
