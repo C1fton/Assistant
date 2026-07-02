@@ -40,34 +40,42 @@ export const LLMSettingModal = ({ open, onOpenChange }) => {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="llm-settings-dialog">
         <DialogHeader>
-          <DialogTitle>LLM智能服务配置</DialogTitle>
+          <DialogTitle>LLM 配置</DialogTitle>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid gap-2">
-            <Label htmlFor="apiKey">API 密钥</Label>
+        <div className="llm-settings-body">
+          <div className="llm-settings-field">
+            <Label className="llm-settings-label" htmlFor="apiKey">
+              API 密钥
+            </Label>
             <Input
               id="apiKey"
               type="password"
+              className="llm-settings-input"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder="sk-xxxxxxxxxxxxxxxx"
             />
           </div>
-          <div className="grid gap-2">
-            <Label htmlFor="baseUrl">API 地址</Label>
+          <div className="llm-settings-field">
+            <Label className="llm-settings-label" htmlFor="baseUrl">
+              API 地址
+            </Label>
             <Input
               id="baseUrl"
+              className="llm-settings-input"
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}
               placeholder="https://api.openai.com/v1"
             />
           </div>
-          <div className="grid gap-2">
-            <Label htmlFor="model">选择模型</Label>
+          <div className="llm-settings-field">
+            <Label className="llm-settings-label" htmlFor="model">
+              模型
+            </Label>
             <Select value={model} onValueChange={setModel}>
-              <SelectTrigger id="model">
+              <SelectTrigger id="model" className="llm-settings-input">
                 <SelectValue placeholder="选择模型" />
               </SelectTrigger>
               <SelectContent>
@@ -78,12 +86,12 @@ export const LLMSettingModal = ({ open, onOpenChange }) => {
               </SelectContent>
             </Select>
           </div>
-          <div className="text-sm text-muted-foreground">
+          <div className="llm-settings-note">
             <p>支持所有 OpenAI 兼容的大模型服务，配置后即可使用智能分析功能。</p>
-            <p className="mt-1">密钥仅存储在本地浏览器中，不会上传到任何服务器。</p>
+            <p>密钥仅保存在当前浏览器，不会同步到 Supabase，也不会上传到 GitHub Pages。</p>
           </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="llm-settings-footer">
           <Button variant="secondary" onClick={() => onOpenChange(false)}>
             取消
           </Button>

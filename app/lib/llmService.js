@@ -45,10 +45,9 @@ const getClientStorageValue = (key) => {
  * @returns {Promise<string>} 模型返回结果
  */
 export const callLLM = async (messages, options = {}) => {
-  const apiKey = process.env.NEXT_PUBLIC_LLM_API_KEY || getClientStorageValue('llm_api_key');
-  const baseUrl =
-    process.env.NEXT_PUBLIC_LLM_BASE_URL || getClientStorageValue('llm_base_url') || 'https://api.openai.com/v1';
-  const defaultModel = process.env.NEXT_PUBLIC_LLM_MODEL || getClientStorageValue('llm_model') || 'gpt-3.5-turbo';
+  const apiKey = getClientStorageValue('llm_api_key');
+  const baseUrl = getClientStorageValue('llm_base_url') || 'https://api.openai.com/v1';
+  const defaultModel = getClientStorageValue('llm_model') || 'gpt-3.5-turbo';
 
   if (!apiKey) {
     throw new Error('请先在设置中配置 LLM API 密钥');

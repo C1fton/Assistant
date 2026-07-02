@@ -1,6 +1,6 @@
 {
-  "name": "基估宝",
-  "short_name": "基估宝",
+  "name": "Assistant",
+  "short_name": "Assistant",
   "description": "基金管理管家",
   "start_url": "/",
   "scope": "/",

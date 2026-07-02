@@ -843,7 +843,7 @@ export default function MyEarningsCalendarPage({ open, onOpenChange, series = []
                       <span className="text-[26px] font-bold text-[var(--primary)] leading-none tracking-tight">
                         {percentile}%
                       </span>
-                      <span className="text-[13px] text-muted-foreground ml-0.5">的基估宝用户</span>
+                      <span className="text-[13px] text-muted-foreground ml-0.5">的 Assistant 用户</span>
                     </div>
                   </div>
                   <EarningsRankIllustration />

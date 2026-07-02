@@ -24,7 +24,7 @@ export default function FeedbackModal({ onClose, user, onOpenWeChat }) {
 
     // Web3Forms Access Key
     formData.append('access_key', process.env.NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY || '');
-    formData.append('subject', '基估宝 - 用户反馈');
+    formData.append('subject', 'Assistant - 用户反馈');
 
     try {
       const data = await submitFeedback(formData);

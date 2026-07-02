@@ -5249,8 +5249,81 @@ html::-webkit-scrollbar-thumb:active,
     backdrop-filter: blur(8px) !important;
   }
 
-  [data-theme='light'] .trend-tooltip-desktop {
+[data-theme='light'] .trend-tooltip-desktop {
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.2)) !important;
     backdrop-filter: blur(2px) !important;
+  }
+}
+
+/* LLM 配置弹窗：避免全局 .grid 布局影响表单 */
+.llm-settings-dialog {
+  width: min(560px, calc(100vw - 32px)) !important;
+  max-width: min(560px, calc(100vw - 32px)) !important;
+}
+
+.llm-settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px 0 4px;
+}
+
+.llm-settings-field {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.llm-settings-label {
+  display: block;
+  white-space: nowrap;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.llm-settings-input {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+.llm-settings-note {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 2px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--secondary) 65%, transparent);
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.llm-settings-note p {
+  margin: 0;
+}
+
+.llm-settings-footer {
+  display: flex !important;
+  flex-direction: row !important;
+  justify-content: flex-end !important;
+  gap: 10px !important;
+  margin-top: 8px;
+}
+
+@media (max-width: 520px) {
+  .llm-settings-field {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .llm-settings-footer {
+    flex-direction: column-reverse !important;
   }
 }
