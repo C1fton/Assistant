@@ -31,6 +31,19 @@ const DEFAULT_MODEL_CONFIG = {
   temperature: 0.7
 };
 
+export const LLM_PROVIDERS = {
+  openai: {
+    label: 'OpenAI 兼容',
+    defaultBaseUrl: 'https://api.openai.com/v1',
+    defaultModel: 'gpt-4o-mini'
+  },
+  anthropic: {
+    label: 'Anthropic Claude',
+    defaultBaseUrl: 'https://api.anthropic.com/v1',
+    defaultModel: 'claude-3-5-sonnet-latest'
+  }
+};
+
 const getClientStorageValue = (key) => {
   if (typeof window === 'undefined') return '';
   try {
@@ -38,6 +51,42 @@ const getClientStorageValue = (key) => {
   } catch {
     return '';
   }
+};
+
+const normalizeBaseUrl = (baseUrl) => baseUrl.replace(/\/$/, '');
+
+const getEndpoint = (baseUrl, provider) => {
+  const base = normalizeBaseUrl(baseUrl);
+  if (provider === 'anthropic') {
+    return base.endsWith('/messages') ? base : base + '/messages';
+  }
+  return base.endsWith('/chat/completions') ? base : base + '/chat/completions';
+};
+
+const normalizeProvider = (provider) => (provider === 'anthropic' ? 'anthropic' : 'openai');
+
+const toAnthropicPayload = (messages, model, config, options) => {
+  const system = messages
+    .filter((message) => message?.role === 'system')
+    .map((message) => String(message?.content || '').trim())
+    .filter(Boolean)
+    .join('\n\n');
+
+  const anthropicMessages = messages
+    .filter((message) => message?.role !== 'system')
+    .map((message) => ({
+      role: message?.role === 'assistant' ? 'assistant' : 'user',
+      content: String(message?.content || '')
+    }))
+    .filter((message) => message.content);
+
+  return {
+    model,
+    messages: anthropicMessages.length ? anthropicMessages : [{ role: 'user', content: '请回复：连接成功' }],
+    max_tokens: options.maxTokens ?? config.maxTokens,
+    temperature: options.temperature ?? config.temperature,
+    ...(system ? { system } : {})
+  };
 };
 
 /**
@@ -50,9 +99,11 @@ const getClientStorageValue = (key) => {
  * @returns {Promise<string>} 模型返回结果
  */
 export const callLLM = async (messages, options = {}) => {
+  const provider = normalizeProvider(options.provider || getClientStorageValue('llm_provider'));
+  const providerDefaults = LLM_PROVIDERS[provider] || LLM_PROVIDERS.openai;
   const apiKey = options.apiKey || getClientStorageValue('llm_api_key');
-  const baseUrl = options.baseUrl || getClientStorageValue('llm_base_url') || 'https://api.openai.com/v1';
-  const defaultModel = options.model || getClientStorageValue('llm_model') || 'gpt-3.5-turbo';
+  const baseUrl = options.baseUrl || getClientStorageValue('llm_base_url') || providerDefaults.defaultBaseUrl;
+  const defaultModel = options.model || getClientStorageValue('llm_model') || providerDefaults.defaultModel;
 
   if (!apiKey) {
     throw new Error('请先在设置中配置 LLM API 密钥');
@@ -61,20 +112,33 @@ export const callLLM = async (messages, options = {}) => {
   const model = options.model || defaultModel;
   const config = MODEL_CONFIG[model] || DEFAULT_MODEL_CONFIG;
 
-  const response = await fetch(baseUrl.replace(/\/$/, '') + '/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: 'Bearer ' + apiKey
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature: options.temperature ?? config.temperature,
-      max_tokens: options.maxTokens ?? config.maxTokens,
-      stream: false
-    })
-  });
+  const endpoint = getEndpoint(baseUrl, provider);
+  const response =
+    provider === 'anthropic'
+      ? await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': options.anthropicVersion || '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true'
+          },
+          body: JSON.stringify(toAnthropicPayload(messages, model, config, options))
+        })
+      : await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer ' + apiKey
+          },
+          body: JSON.stringify({
+            model,
+            messages,
+            temperature: options.temperature ?? config.temperature,
+            max_tokens: options.maxTokens ?? config.maxTokens,
+            stream: false
+          })
+        });
 
   if (!response.ok) {
     let message = 'API 调用失败: ' + response.status;
@@ -88,6 +152,15 @@ export const callLLM = async (messages, options = {}) => {
   }
 
   const data = await response.json();
+  if (provider === 'anthropic') {
+    return (
+      data?.content
+        ?.map((block) => (block?.type === 'text' ? block.text : ''))
+        .filter(Boolean)
+        .join('\n')
+        .trim() || ''
+    );
+  }
   return data?.choices?.[0]?.message?.content?.trim() || '';
 };
 

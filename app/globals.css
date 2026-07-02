@@ -5290,6 +5290,22 @@ html::-webkit-scrollbar-thumb:active,
   min-width: 0 !important;
 }
 
+.llm-settings-select {
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--foreground);
+  font: inherit;
+  outline: none;
+}
+
+.llm-settings-select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 20%, transparent);
+}
+
 .llm-settings-note {
   display: flex;
   flex-direction: column;
