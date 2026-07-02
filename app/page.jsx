@@ -4615,6 +4615,7 @@ export default function HomePage() {
                 fundsLength={funds.length}
                 refreshCycleStartRef={refreshCycleStartRef}
               />
+              <AIAnalysisPanel />
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button

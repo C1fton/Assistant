@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -149,10 +150,16 @@ export const AIAnalysisPanel = () => {
   return (
     <>
       {/* 入口按钮 */}
-      <Button variant="secondary" size="sm" onClick={() => setOpen(true)} className="flex items-center gap-2">
-        <Brain className="h-4 w-4" />
-        <span>AI智能分析</span>
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button className="icon-button" aria-label="AI智能投顾" onClick={() => setOpen(true)}>
+            <Brain width="18" height="18" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>AI智能投顾</p>
+        </TooltipContent>
+      </Tooltip>
 
       {/* 分析模态框 */}
       <Dialog open={open} onOpenChange={setOpen}>
