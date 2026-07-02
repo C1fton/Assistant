@@ -1098,8 +1098,44 @@ export async function fetchBestValuationSource(code, jzrq, actualZzl) {
  */
 const SOURCE_NAME_TO_ID = { fundgz: 1, sina_ds2: 2, sina_ds3: 3, supabase_qdii: 4 };
 
+// 原项目公开部署使用的只读最佳源映射。优先读取当前项目 Supabase；仅在当前项目
+// 未初始化 fund_pingzhongdata/get_fund_best_source 时回退，保证复刻版本的估值口径一致。
+const REFERENCE_BEST_SOURCE_RPC =
+  'https://mouvsqlmgymsaxikvqsh.supabase.co/rest/v1/rpc/get_fund_best_source';
+const REFERENCE_BEST_SOURCE_KEY = 'sb_publishable_c5f58knbVz8UgOh6L88MUQ_p9j8c1Q-';
+
+const normalizeBestSourceMap = (data) => {
+  if (!isObject(data) || isArray(data)) return {};
+  const result = {};
+  Object.entries(data).forEach(([code, sourceName]) => {
+    const sourceId = SOURCE_NAME_TO_ID[sourceName];
+    if (sourceId != null) result[String(code).trim()] = sourceId;
+  });
+  return result;
+};
+
+const fetchReferenceBestSources = async (fundCodes) => {
+  if (typeof fetch === 'undefined' || !isArray(fundCodes) || fundCodes.length === 0) return {};
+  try {
+    const response = await withRetry(() =>
+      fetch(REFERENCE_BEST_SOURCE_RPC, {
+        method: 'POST',
+        headers: {
+          apikey: REFERENCE_BEST_SOURCE_KEY,
+          Authorization: `Bearer ${REFERENCE_BEST_SOURCE_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ p_fund_codes: fundCodes })
+      })
+    );
+    if (!response.ok) return {};
+    return normalizeBestSourceMap(await response.json());
+  } catch {
+    return {};
+  }
+};
+
 export async function fetchFundBestSource(fundCode) {
-  if (!isSupabaseConfigured) return null;
   const code = fundCode != null ? String(fundCode).trim() : '';
   if (!code) return null;
 
@@ -1110,19 +1146,25 @@ export async function fetchFundBestSource(fundCode) {
     return cached;
   }
 
-  try {
-    const { data, error } = await supabase.rpc('get_fund_best_source', {
-      p_fund_code: code
-    });
-    if (error || !data?.source) return null;
-    const res = SOURCE_NAME_TO_ID[data.source] ?? null;
-    if (res != null) {
-      qc.setQueryData(cacheKey, res, { staleTime: 60 * 60 * 1000 });
+  let sourceId = null;
+  if (isSupabaseConfigured) {
+    try {
+      const { data, error } = await supabase.rpc('get_fund_best_source', {
+        p_fund_code: code
+      });
+      if (!error && data?.source) sourceId = SOURCE_NAME_TO_ID[data.source] ?? null;
+    } catch {
+      sourceId = null;
     }
-    return res;
-  } catch {
-    return null;
   }
+
+  if (sourceId == null) {
+    const referenceMap = await fetchReferenceBestSources([code]);
+    sourceId = referenceMap[code] ?? null;
+  }
+
+  if (sourceId != null) qc.setQueryData(cacheKey, sourceId, { staleTime: 12 * 60 * 60 * 1000 });
+  return sourceId;
 }
 
 /**
@@ -1131,7 +1173,7 @@ export async function fetchFundBestSource(fundCode) {
  * @returns {Promise<Record<string, number>>} 返回对象格式 { "110022": 1, "000001": 2 }
  */
 export async function fetchFundsBestSources(fundCodes) {
-  if (!isSupabaseConfigured || !isArray(fundCodes) || fundCodes.length === 0) return {};
+  if (!isArray(fundCodes) || fundCodes.length === 0) return {};
 
   const qc = getQueryClient();
   const result = {};
@@ -1150,24 +1192,26 @@ export async function fetchFundsBestSources(fundCodes) {
 
   if (missingCodes.length === 0) return result;
 
-  try {
-    const { data, error } = await supabase.rpc('get_fund_best_source', {
-      p_fund_codes: missingCodes
-    });
-    if (error || !data) return result;
-
-    // 返回的 data 类似 { "110022": "sina_ds2", "000001": "fundgz" }
-    Object.entries(data).forEach(([code, sourceName]) => {
-      const id = SOURCE_NAME_TO_ID[sourceName];
-      if (id != null) {
-        result[code] = id;
-        qc.setQueryData(qk.fundBestSource(code), id, { staleTime: 60 * 60 * 1000 });
-      }
-    });
-    return result;
-  } catch {
-    return result;
+  if (isSupabaseConfigured) {
+    try {
+      const { data, error } = await supabase.rpc('get_fund_best_source', {
+        p_fund_codes: missingCodes
+      });
+      if (!error && data) Object.assign(result, normalizeBestSourceMap(data));
+    } catch {
+      // 当前项目未初始化最佳源 RPC 时继续使用公开参考映射。
+    }
   }
+
+  const unresolvedCodes = missingCodes.filter((code) => result[code] == null);
+  if (unresolvedCodes.length > 0) {
+    Object.assign(result, await fetchReferenceBestSources(unresolvedCodes));
+  }
+
+  Object.entries(result).forEach(([code, sourceId]) => {
+    qc.setQueryData(qk.fundBestSource(code), sourceId, { staleTime: 12 * 60 * 60 * 1000 });
+  });
+  return result;
 }
 
 /**

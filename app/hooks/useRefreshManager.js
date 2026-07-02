@@ -228,7 +228,7 @@ export function useRefreshManager({ scheduleDcaTrades, processPendingQueue, devi
             }
           } else {
             const autoSourceCodes = currentFunds
-              .filter((f) => f.autoSource && uniqueCodes.includes(f.code))
+              .filter((f) => f.autoSource !== false && uniqueCodes.includes(f.code))
               .map((f) => f.code);
 
             if (autoSourceCodes.length > 0) {
@@ -237,9 +237,13 @@ export function useRefreshManager({ scheduleDcaTrades, processPendingQueue, devi
                 useStorageStore.getState().setFunds((prev) => {
                   let changed = false;
                   const next = prev.map((f) => {
-                    if (f.autoSource && bestSourcesMap[f.code] && f.dataSource !== bestSourcesMap[f.code]) {
+                    if (
+                      f.autoSource !== false &&
+                      bestSourcesMap[f.code] &&
+                      (f.dataSource !== bestSourcesMap[f.code] || f.autoSource !== true)
+                    ) {
                       changed = true;
-                      return { ...f, dataSource: bestSourcesMap[f.code] };
+                      return { ...f, dataSource: bestSourcesMap[f.code], autoSource: true };
                     }
                     return f;
                   });
