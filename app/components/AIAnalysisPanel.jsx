@@ -26,37 +26,80 @@ export const AIAnalysisPanel = () => {
   const funds = useStorageStore((state) => state.funds);
   const groups = useStorageStore((state) => state.groups);
 
+  const toNumber = (value, fallback = null) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+  };
+
+  const getCurrentNav = (fund) => {
+    if (!fund) return null;
+    const estimateNav = fund.noValuation ? null : toNumber(fund.gsz);
+    return estimateNav ?? toNumber(fund.dwjz);
+  };
+
+  const getChangePercent = (fund) => {
+    if (!fund) return null;
+    const estimateChange = fund.noValuation ? null : toNumber(fund.gszzl);
+    return estimateChange ?? toNumber(fund.zzl);
+  };
+
   // 格式化持仓数据，传给LLM
   const formatHoldingsData = () => {
     const fundMap = new Map(funds.map((f) => [f.code, f]));
     const holdingList = Object.entries(holdings).map(([code, holding]) => {
       const fund = fundMap.get(code);
+      const share = toNumber(holding?.share ?? holding?.shares, 0);
+      const costNav = toNumber(holding?.cost);
+      const currentNav = getCurrentNav(fund);
+      const costAmount = share > 0 && costNav != null ? share * costNav : 0;
+      const currentAmount = share > 0 && currentNav != null ? share * currentNav : toNumber(holding?.amount, 0);
+      const profitAmount = currentAmount && costAmount ? currentAmount - costAmount : toNumber(holding?.profit, null);
+      const profitRate = profitAmount != null && costAmount > 0 ? (profitAmount / costAmount) * 100 : null;
+
       return {
         code,
         name: fund?.name || '未知基金',
         type: fund?.type || '未知类型',
-        holdingAmount: holding.amount || 0,
-        holdingShares: holding.shares || 0,
-        costPrice: holding.cost || 0,
-        currentPrice: fund?.dwjz || 0,
-        profit: holding.profit || 0,
-        profitRate: holding.profitRate || 0,
-        theme: fund?.theme || '未知'
+        holdingAmount: Number(currentAmount || 0).toFixed(2),
+        holdingShares: share,
+        costNav,
+        currentNav,
+        profitAmount: profitAmount == null ? null : Number(profitAmount.toFixed(2)),
+        profitRate: profitRate == null ? null : Number(profitRate.toFixed(2)),
+        estimatedChangePercent: fund?.noValuation ? null : toNumber(fund?.gszzl),
+        previousDayChangePercent: toNumber(fund?.zzl),
+        netValueDate: fund?.jzrq || '',
+        estimateTime: fund?.gztime || fund?.time || '',
+        theme: fund?.theme || fund?.tags || '未知'
       };
     });
 
     // 计算总持仓金额和各基金占比
-    const totalAmount = holdingList.reduce((sum, item) => sum + item.holdingAmount, 0);
+    const totalAmount = holdingList.reduce((sum, item) => sum + Number(item.holdingAmount || 0), 0);
     const holdingsWithRatio = holdingList.map((item) => ({
       ...item,
-      ratio: totalAmount > 0 ? ((item.holdingAmount / totalAmount) * 100).toFixed(2) + '%' : '0%'
+      ratio: totalAmount > 0 ? ((Number(item.holdingAmount || 0) / totalAmount) * 100).toFixed(2) + '%' : '0%'
     }));
+
+    const concentration = holdingsWithRatio
+      .map((item) => ({ code: item.code, name: item.name, ratio: item.ratio, amount: item.holdingAmount }))
+      .sort((a, b) => Number.parseFloat(b.ratio) - Number.parseFloat(a.ratio));
+
+    const themeExposure = holdingsWithRatio.reduce((acc, item) => {
+      const theme = String(item.theme || '未知');
+      acc[theme] = (acc[theme] || 0) + Number(item.holdingAmount || 0);
+      return acc;
+    }, {});
 
     return JSON.stringify(
       {
-        totalAmount,
+        source: '当前页面 localStorage 持仓 + 当前已加载基金估值/净值数据',
+        generatedAt: new Date().toLocaleString(),
+        totalAmount: Number(totalAmount.toFixed(2)),
         fundCount: holdingList.length,
         groupCount: groups.length,
+        topConcentration: concentration.slice(0, 8),
+        themeExposure,
         holdings: holdingsWithRatio
       },
       null,
@@ -64,25 +107,45 @@ export const AIAnalysisPanel = () => {
     );
   };
 
-  // 获取模拟市场数据（后续可以接入真实的市场行情API）
+  // 基于当前页面已有基金数据生成市场/组合快照
   const getMarketData = () => {
+    const fundSnapshot = funds.map((fund) => {
+      const changePercent = getChangePercent(fund);
+      return {
+        code: fund?.code,
+        name: fund?.name,
+        currentNav: getCurrentNav(fund),
+        estimatedChangePercent: fund?.noValuation ? null : toNumber(fund?.gszzl),
+        previousDayChangePercent: toNumber(fund?.zzl),
+        changePercent,
+        netValueDate: fund?.jzrq || '',
+        estimateTime: fund?.gztime || fund?.time || '',
+        noValuation: !!fund?.noValuation,
+        theme: fund?.theme || fund?.tags || ''
+      };
+    });
+
+    const changedFunds = fundSnapshot.filter((item) => item.changePercent != null);
+    const topRisers = [...changedFunds].sort((a, b) => b.changePercent - a.changePercent).slice(0, 8);
+    const topFallers = [...changedFunds].sort((a, b) => a.changePercent - b.changePercent).slice(0, 8);
+    const highVolatility = [...changedFunds]
+      .filter((item) => Math.abs(item.changePercent) >= 2)
+      .sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent))
+      .slice(0, 10);
+
     return JSON.stringify(
       {
-        date: new Date().toLocaleDateString(),
-        shIndex: '3200.56',
-        shChange: '+1.23%',
-        szIndex: '11800.34',
-        szChange: '+0.87%',
-        cyIndex: '2450.78',
-        cyChange: '+1.56%',
-        hotSectors: ['AI人工智能', '半导体', '新能源', '医药生物', '消费'],
-        fallingSectors: ['房地产', '金融', '煤炭'],
-        marketNews: [
-          '央行降准0.5个百分点，释放长期资金约1万亿元',
-          'AI大模型应用加速落地，相关产业链受益',
-          '新能源行业产能出清，龙头企业估值修复',
-          '医药集采政策边际改善，创新药板块反弹'
-        ]
+        source: '当前页面已加载基金估值/净值数据；不含外部新闻抓取',
+        generatedAt: new Date().toLocaleString(),
+        fundCount: funds.length,
+        valuedFundCount: changedFunds.length,
+        risingCount: changedFunds.filter((item) => item.changePercent > 0).length,
+        fallingCount: changedFunds.filter((item) => item.changePercent < 0).length,
+        noValuationCount: fundSnapshot.filter((item) => item.noValuation).length,
+        topRisers,
+        topFallers,
+        highVolatility,
+        allFunds: fundSnapshot.slice(0, 80)
       },
       null,
       2

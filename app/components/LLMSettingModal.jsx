@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { callLLM } from '@/app/lib/llmService';
 import { toast } from 'sonner';
 
 /**
@@ -22,19 +22,53 @@ export const LLMSettingModal = ({ open, onOpenChange }) => {
     typeof window === 'undefined' ? 'gpt-3.5-turbo' : window.localStorage.getItem('llm_model') || 'gpt-3.5-turbo'
   );
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
 
   const handleSave = () => {
     setSaving(true);
     try {
       localStorage.setItem('llm_api_key', apiKey.trim());
       localStorage.setItem('llm_base_url', baseUrl.trim());
-      localStorage.setItem('llm_model', model);
+      localStorage.setItem('llm_model', model.trim());
       toast.success('LLM配置已保存');
       onOpenChange(false);
     } catch (error) {
       toast.error('保存失败: ' + error.message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleTestConnection = async () => {
+    const nextApiKey = apiKey.trim();
+    const nextBaseUrl = baseUrl.trim();
+    const nextModel = model.trim();
+
+    if (!nextApiKey || !nextBaseUrl || !nextModel) {
+      toast.error('请先填写 API 密钥、API 地址和模型名称');
+      return;
+    }
+
+    setTesting(true);
+    try {
+      const result = await callLLM(
+        [
+          { role: 'system', content: '你是接口连通性测试助手，只需简短回答。' },
+          { role: 'user', content: '请只回复“连接成功”。' }
+        ],
+        {
+          apiKey: nextApiKey,
+          baseUrl: nextBaseUrl,
+          model: nextModel,
+          temperature: 0,
+          maxTokens: 16
+        }
+      );
+      toast.success(result ? `测试成功：${result}` : '测试成功');
+    } catch (error) {
+      toast.error('测试失败：' + (error.message || '请检查 API 配置'));
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -74,17 +108,13 @@ export const LLMSettingModal = ({ open, onOpenChange }) => {
             <Label className="llm-settings-label" htmlFor="model">
               模型
             </Label>
-            <Select value={model} onValueChange={setModel}>
-              <SelectTrigger id="model" className="llm-settings-input">
-                <SelectValue placeholder="选择模型" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="gpt-3.5-turbo">GPT-3.5-turbo</SelectItem>
-                <SelectItem value="gpt-4o">GPT-4o</SelectItem>
-                <SelectItem value="deepseek-chat">DeepSeek Chat</SelectItem>
-                <SelectItem value="moonshot-v1-8k">Moonshot V1 8K</SelectItem>
-              </SelectContent>
-            </Select>
+            <Input
+              id="model"
+              className="llm-settings-input"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              placeholder="例如 gpt-4o-mini / deepseek-chat / qwen-plus"
+            />
           </div>
           <div className="llm-settings-note">
             <p>支持所有 OpenAI 兼容的大模型服务，配置后即可使用智能分析功能。</p>
@@ -92,10 +122,17 @@ export const LLMSettingModal = ({ open, onOpenChange }) => {
           </div>
         </div>
         <DialogFooter className="llm-settings-footer">
+          <Button
+            variant="outline"
+            onClick={handleTestConnection}
+            disabled={testing || !apiKey.trim() || !baseUrl.trim() || !model.trim()}
+          >
+            {testing ? '测试中...' : '测试连接'}
+          </Button>
           <Button variant="secondary" onClick={() => onOpenChange(false)}>
             取消
           </Button>
-          <Button onClick={handleSave} disabled={saving || !apiKey.trim()}>
+          <Button onClick={handleSave} disabled={saving || !apiKey.trim() || !model.trim()}>
             {saving ? '保存中...' : '保存'}
           </Button>
         </DialogFooter>

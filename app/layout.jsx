@@ -8,10 +8,9 @@ import ClientErrorBoundary from './components/ClientErrorBoundary';
 import GlobalClientErrorHandler from './components/GlobalClientErrorHandler';
 import { QueryClientProviderWrapper } from './providers/query-client-provider';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import packageJson from '../package.json';
 
 export const metadata = {
-  title: `Assistant V${packageJson.version}`,
+  title: 'Assistant',
   description: '输入基金编号添加基金，实时显示估值与前10重仓'
 };
 
