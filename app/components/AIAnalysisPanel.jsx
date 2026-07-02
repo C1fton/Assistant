@@ -1,14 +1,169 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Brain, TrendingUp, Newspaper, AlertTriangle, RefreshCw, Settings, Loader2 } from 'lucide-react';
-import { useStorageStore } from '@/app/stores/storageStore';
+import { storageStore, useStorageStore } from '@/app/stores/storageStore';
 import { callLLM, renderPrompt, PROMPT_TEMPLATES } from '@/app/lib/llmService';
 import { LLMSettingModal } from './LLMSettingModal';
 import { toast } from 'sonner';
+
+const renderInlineMarkdown = (text) => {
+  const parts = String(text || '').split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, index) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={index}>{part.slice(2, -2)}</strong>;
+    }
+    return <React.Fragment key={index}>{part}</React.Fragment>;
+  });
+};
+
+const isTableDivider = (line) => /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(line);
+
+const parseTableRow = (line) =>
+  line
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split('|')
+    .map((cell) => cell.trim());
+
+const MarkdownReport = ({ content }) => {
+  if (!content) return null;
+
+  const lines = String(content).split(/\r?\n/);
+  const nodes = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      i += 1;
+      continue;
+    }
+
+    if (trimmed.includes('|') && lines[i + 1] && isTableDivider(lines[i + 1])) {
+      const headers = parseTableRow(trimmed);
+      const rows = [];
+      i += 2;
+      while (i < lines.length && lines[i].trim().includes('|')) {
+        rows.push(parseTableRow(lines[i]));
+        i += 1;
+      }
+      nodes.push(
+        <div className="ai-report-table-wrap" key={`table-${i}`}>
+          <table className="ai-report-table">
+            <thead>
+              <tr>
+                {headers.map((header, index) => (
+                  <th key={index}>{renderInlineMarkdown(header)}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, rowIndex) => (
+                <tr key={rowIndex}>
+                  {headers.map((_, cellIndex) => (
+                    <td key={cellIndex}>{renderInlineMarkdown(row[cellIndex] || '')}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+      continue;
+    }
+
+    const headingMatch = trimmed.match(/^(#{1,4})\s+(.+)$/);
+    if (headingMatch) {
+      const level = headingMatch[1].length;
+      const Tag = level <= 2 ? 'h3' : 'h4';
+      nodes.push(
+        <Tag className={`ai-report-heading ai-report-heading-${level}`} key={`heading-${i}`}>
+          {renderInlineMarkdown(headingMatch[2])}
+        </Tag>
+      );
+      i += 1;
+      continue;
+    }
+
+    const bulletMatch = trimmed.match(/^[-*]\s+(.+)$/);
+    if (bulletMatch) {
+      const items = [];
+      while (i < lines.length) {
+        const match = lines[i].trim().match(/^[-*]\s+(.+)$/);
+        if (!match) break;
+        items.push(match[1]);
+        i += 1;
+      }
+      nodes.push(
+        <ul className="ai-report-list" key={`ul-${i}`}>
+          {items.map((item, index) => (
+            <li key={index}>{renderInlineMarkdown(item)}</li>
+          ))}
+        </ul>
+      );
+      continue;
+    }
+
+    const orderedMatch = trimmed.match(/^\d+[.)]\s+(.+)$/);
+    if (orderedMatch) {
+      const items = [];
+      while (i < lines.length) {
+        const match = lines[i].trim().match(/^\d+[.)]\s+(.+)$/);
+        if (!match) break;
+        items.push(match[1]);
+        i += 1;
+      }
+      nodes.push(
+        <ol className="ai-report-list ai-report-ordered" key={`ol-${i}`}>
+          {items.map((item, index) => (
+            <li key={index}>{renderInlineMarkdown(item)}</li>
+          ))}
+        </ol>
+      );
+      continue;
+    }
+
+    nodes.push(
+      <p className="ai-report-paragraph" key={`p-${i}`}>
+        {renderInlineMarkdown(trimmed)}
+      </p>
+    );
+    i += 1;
+  }
+
+  return <div className="ai-report">{nodes}</div>;
+};
+
+const AnalysisResult = ({ content, emptyText = '点击按钮生成本页分析报告。' }) => {
+  if (!content) {
+    return <div className="ai-report-empty">{emptyText}</div>;
+  }
+  return <MarkdownReport content={content} />;
+};
+
+const AI_RESULT_DEFAULTS = {
+  analysis: '',
+  recommendation: '',
+  market: '',
+  risk: '',
+  rebalance: ''
+};
+
+const getSavedAIResults = () => {
+  if (typeof window === 'undefined') return null;
+  try {
+    return storageStore.getItem('ai_analysis_results', null);
+  } catch {
+    return null;
+  }
+};
 
 /**
  * 智能分析主组件
@@ -17,14 +172,22 @@ export const AIAnalysisPanel = () => {
   const [open, setOpen] = useState(false);
   const [settingOpen, setSettingOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('analysis');
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState('');
+  const [loadingType, setLoadingType] = useState('');
+  const [results, setResults] = useState(() => ({ ...AI_RESULT_DEFAULTS, ...(getSavedAIResults() || {}) }));
   const [riskPreference, setRiskPreference] = useState('moderate');
 
   // 从store获取持仓和基金数据
   const holdings = useStorageStore((state) => state.holdings);
   const funds = useStorageStore((state) => state.funds);
   const groups = useStorageStore((state) => state.groups);
+
+  useEffect(() => {
+    try {
+      storageStore.setItem('ai_analysis_results', JSON.stringify(results));
+    } catch {
+      // ignore local persistence errors
+    }
+  }, [results]);
 
   const toNumber = (value, fallback = null) => {
     const n = Number(value);
@@ -93,7 +256,7 @@ export const AIAnalysisPanel = () => {
 
     return JSON.stringify(
       {
-        source: '当前页面 localStorage 持仓 + 当前已加载基金估值/净值数据',
+        source: '当前页面本地持仓 + 当前已加载基金估值/净值数据',
         generatedAt: new Date().toLocaleString(),
         totalAmount: Number(totalAmount.toFixed(2)),
         fundCount: holdingList.length,
@@ -154,15 +317,14 @@ export const AIAnalysisPanel = () => {
 
   // 执行分析
   const handleAnalyze = async (type) => {
-    const apiKey = localStorage.getItem('llm_api_key');
+    const apiKey = storageStore.getItem('llm_api_key');
     if (!apiKey) {
       toast.error('请先配置LLM API密钥');
       setSettingOpen(true);
       return;
     }
 
-    setLoading(true);
-    setResult('');
+    setLoadingType(type);
 
     try {
       const holdingsData = formatHoldingsData();
@@ -198,15 +360,19 @@ export const AIAnalysisPanel = () => {
       }
 
       const response = await callLLM([
-        { role: 'system', content: '你是专业的基金投资分析助手，回答要专业、客观、实用，避免空泛的建议。' },
+        {
+          role: 'system',
+          content:
+            '你是专业的基金投资分析助手。必须基于输入数据给出逐基金、可执行、条件化的操作建议；不要承诺收益，不要编造输入中没有的数据。'
+        },
         { role: 'user', content: prompt }
       ]);
 
-      setResult(response);
+      setResults((prev) => ({ ...prev, [type]: response }));
     } catch (error) {
       toast.error('分析失败: ' + error.message);
     } finally {
-      setLoading(false);
+      setLoadingType('');
     }
   };
 
@@ -270,13 +436,11 @@ export const AIAnalysisPanel = () => {
                     <p className="ai-analysis-card-description">全面分析你的持仓结构、风险分散情况、行业集中度等</p>
                   </div>
                   <div className="ai-analysis-card-content">
-                    <Button onClick={() => handleAnalyze('analysis')} disabled={loading} className="mb-4">
-                      {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                    <Button onClick={() => handleAnalyze('analysis')} disabled={!!loadingType} className="mb-4">
+                      {loadingType === 'analysis' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                       开始分析
                     </Button>
-                    {result && activeTab === 'analysis' && (
-                      <div className="p-4 bg-muted rounded-lg whitespace-pre-line text-sm">{result}</div>
-                    )}
+                    <AnalysisResult content={results.analysis} />
                   </div>
                 </div>
               </TabsContent>
@@ -301,13 +465,11 @@ export const AIAnalysisPanel = () => {
                         </SelectContent>
                       </Select>
                     </div>
-                    <Button onClick={() => handleAnalyze('recommendation')} disabled={loading} className="mb-4">
-                      {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                    <Button onClick={() => handleAnalyze('recommendation')} disabled={!!loadingType} className="mb-4">
+                      {loadingType === 'recommendation' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                       获取推荐
                     </Button>
-                    {result && activeTab === 'recommendation' && (
-                      <div className="p-4 bg-muted rounded-lg whitespace-pre-line text-sm">{result}</div>
-                    )}
+                    <AnalysisResult content={results.recommendation} />
                   </div>
                 </div>
               </TabsContent>
@@ -319,13 +481,11 @@ export const AIAnalysisPanel = () => {
                     <p className="ai-analysis-card-description">结合最新行情和新闻，分析市场趋势，给出操作建议</p>
                   </div>
                   <div className="ai-analysis-card-content">
-                    <Button onClick={() => handleAnalyze('market')} disabled={loading} className="mb-4">
-                      {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                    <Button onClick={() => handleAnalyze('market')} disabled={!!loadingType} className="mb-4">
+                      {loadingType === 'market' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                       查看分析
                     </Button>
-                    {result && activeTab === 'market' && (
-                      <div className="p-4 bg-muted rounded-lg whitespace-pre-line text-sm">{result}</div>
-                    )}
+                    <AnalysisResult content={results.market} />
                   </div>
                 </div>
               </TabsContent>
@@ -337,13 +497,11 @@ export const AIAnalysisPanel = () => {
                     <p className="ai-analysis-card-description">排查持仓潜在风险，提前提示利空消息和大幅波动风险</p>
                   </div>
                   <div className="ai-analysis-card-content">
-                    <Button onClick={() => handleAnalyze('risk')} disabled={loading} className="mb-4">
-                      {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                    <Button onClick={() => handleAnalyze('risk')} disabled={!!loadingType} className="mb-4">
+                      {loadingType === 'risk' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                       风险检测
                     </Button>
-                    {result && activeTab === 'risk' && (
-                      <div className="p-4 bg-muted rounded-lg whitespace-pre-line text-sm">{result}</div>
-                    )}
+                    <AnalysisResult content={results.risk} />
                   </div>
                 </div>
               </TabsContent>
@@ -355,13 +513,11 @@ export const AIAnalysisPanel = () => {
                     <p className="ai-analysis-card-description">根据当前市场情况和持仓结构，给出具体的调仓优化建议</p>
                   </div>
                   <div className="ai-analysis-card-content">
-                    <Button onClick={() => handleAnalyze('rebalance')} disabled={loading} className="mb-4">
-                      {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                    <Button onClick={() => handleAnalyze('rebalance')} disabled={!!loadingType} className="mb-4">
+                      {loadingType === 'rebalance' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                       获取建议
                     </Button>
-                    {result && activeTab === 'rebalance' && (
-                      <div className="p-4 bg-muted rounded-lg whitespace-pre-line text-sm">{result}</div>
-                    )}
+                    <AnalysisResult content={results.rebalance} />
                   </div>
                 </div>
               </TabsContent>

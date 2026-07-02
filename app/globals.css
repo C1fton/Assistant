@@ -5332,6 +5332,128 @@ html::-webkit-scrollbar-thumb:active,
   margin-top: 8px;
 }
 
+.ai-analysis-card {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--card) 84%, transparent);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.16);
+  overflow: hidden;
+}
+
+.ai-analysis-card-header {
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.ai-analysis-card-title {
+  margin: 0 0 6px;
+  color: var(--foreground);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.ai-analysis-card-description {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ai-analysis-card-content {
+  padding: 16px 18px 18px;
+}
+
+.ai-report,
+.ai-report-empty {
+  margin-top: 2px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg) 88%, var(--card) 12%);
+  color: var(--foreground);
+  font-size: 14px;
+  line-height: 1.72;
+}
+
+.ai-report-empty {
+  color: var(--muted-foreground);
+}
+
+.ai-report-heading {
+  margin: 16px 0 8px;
+  color: var(--foreground);
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.ai-report-heading:first-child {
+  margin-top: 0;
+}
+
+.ai-report-heading-1,
+.ai-report-heading-2 {
+  font-size: 17px;
+}
+
+.ai-report-heading-3,
+.ai-report-heading-4 {
+  font-size: 15px;
+}
+
+.ai-report-paragraph {
+  margin: 8px 0;
+}
+
+.ai-report-list {
+  margin: 8px 0 12px;
+  padding-left: 22px;
+}
+
+.ai-report-list li {
+  margin: 5px 0;
+}
+
+.ai-report strong {
+  color: var(--foreground);
+  font-weight: 750;
+}
+
+.ai-report-table-wrap {
+  margin: 12px 0 16px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.ai-report-table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+  background: color-mix(in srgb, var(--card) 74%, transparent);
+}
+
+.ai-report-table th,
+.ai-report-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  text-align: left;
+  vertical-align: top;
+  color: var(--foreground);
+}
+
+.ai-report-table th {
+  background: color-mix(in srgb, var(--secondary) 78%, transparent);
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.ai-report-table tr:last-child td {
+  border-bottom: 0;
+}
+
 @media (max-width: 520px) {
   .llm-settings-field {
     grid-template-columns: 1fr;

@@ -4,28 +4,28 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { callLLM, LLM_PROVIDERS } from '@/app/lib/llmService';
+import { storageStore } from '@/app/stores/storageStore';
 import { toast } from 'sonner';
+
+const getSavedLLMValue = (key, fallback = '') => {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    return storageStore.getItem(key, fallback) || fallback;
+  } catch {
+    return fallback;
+  }
+};
 
 /**
  * LLM设置模态框
  */
 export const LLMSettingModal = ({ open, onOpenChange }) => {
-  const [provider, setProvider] = useState(() =>
-    typeof window === 'undefined' ? 'openai' : window.localStorage.getItem('llm_provider') || 'openai'
-  );
-  const [apiKey, setApiKey] = useState(() =>
-    typeof window === 'undefined' ? '' : window.localStorage.getItem('llm_api_key') || ''
-  );
+  const [provider, setProvider] = useState(() => getSavedLLMValue('llm_provider', 'openai'));
+  const [apiKey, setApiKey] = useState(() => getSavedLLMValue('llm_api_key', ''));
   const [baseUrl, setBaseUrl] = useState(() =>
-    typeof window === 'undefined'
-      ? LLM_PROVIDERS.openai.defaultBaseUrl
-      : window.localStorage.getItem('llm_base_url') || LLM_PROVIDERS.openai.defaultBaseUrl
+    getSavedLLMValue('llm_base_url', LLM_PROVIDERS.openai.defaultBaseUrl)
   );
-  const [model, setModel] = useState(() =>
-    typeof window === 'undefined'
-      ? LLM_PROVIDERS.openai.defaultModel
-      : window.localStorage.getItem('llm_model') || LLM_PROVIDERS.openai.defaultModel
-  );
+  const [model, setModel] = useState(() => getSavedLLMValue('llm_model', LLM_PROVIDERS.openai.defaultModel));
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
 
@@ -45,10 +45,10 @@ export const LLMSettingModal = ({ open, onOpenChange }) => {
   const handleSave = () => {
     setSaving(true);
     try {
-      localStorage.setItem('llm_provider', provider);
-      localStorage.setItem('llm_api_key', apiKey.trim());
-      localStorage.setItem('llm_base_url', baseUrl.trim());
-      localStorage.setItem('llm_model', model.trim());
+      storageStore.setItem('llm_provider', provider);
+      storageStore.setItem('llm_api_key', apiKey.trim());
+      storageStore.setItem('llm_base_url', baseUrl.trim());
+      storageStore.setItem('llm_model', model.trim());
       toast.success('LLM配置已保存');
       onOpenChange(false);
     } catch (error) {
