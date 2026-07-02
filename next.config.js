@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  basePath: '/Assistant',
   reactStrictMode: true,
   reactCompiler: true,
   output: 'export',
