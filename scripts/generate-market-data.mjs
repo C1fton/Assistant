@@ -71,10 +71,22 @@ const fetchRanking = async ({ sort, order, page, pageSize }) => {
   return payload;
 };
 
-const fetchSectorList = async (typeCode, sectorType) => {
+const normalizeSectorRows = (rows, sectorType) => {
+  if (!isArray(rows)) return [];
+  return rows.map((item) => ({
+    id: `${sectorType}-${item.f12}`,
+    sector_id: item.f12 != null ? String(item.f12) : '',
+    sector_name: item.f14 != null ? String(item.f14) : '',
+    sector_type: sectorType,
+    change_pct: item.f3 != null && Number.isFinite(Number(item.f3)) ? Number(item.f3) : 0,
+    net_inflow: item.f62 != null && Number.isFinite(Number(item.f62)) ? Number(item.f62) : 0
+  }));
+};
+
+const fetchSectorPage = async (typeCode, sectorType, page = 1) => {
   const params = new URLSearchParams({
-    pn: '1',
-    pz: '500',
+    pn: String(page),
+    pz: '100',
     po: '1',
     np: '1',
     fltt: '2',
@@ -85,16 +97,26 @@ const fetchSectorList = async (typeCode, sectorType) => {
   });
   const payload = await fetchJson(`https://push2delay.eastmoney.com/api/qt/clist/get?${params.toString()}`);
   const rows = payload?.data?.diff;
-  if (!isArray(rows)) return [];
+  const total = payload?.data?.total != null && Number.isFinite(Number(payload.data.total)) ? Number(payload.data.total) : 0;
+  return { rows: normalizeSectorRows(rows, sectorType), total };
+};
 
-  return rows.map((item) => ({
-    id: `${sectorType}-${item.f12}`,
-    sector_id: item.f12 != null ? String(item.f12) : '',
-    sector_name: item.f14 != null ? String(item.f14) : '',
-    sector_type: sectorType,
-    change_pct: item.f3 != null && Number.isFinite(Number(item.f3)) ? Number(item.f3) : 0,
-    net_inflow: item.f62 != null && Number.isFinite(Number(item.f62)) ? Number(item.f62) : 0
-  }));
+const fetchSectorList = async (typeCode, sectorType) => {
+  const firstPage = await fetchSectorPage(typeCode, sectorType, 1);
+  const totalPages = Math.min(8, Math.max(1, Math.ceil((firstPage.total || firstPage.rows.length) / 100)));
+  if (totalPages <= 1) return firstPage.rows;
+
+  const restPages = [];
+  for (let page = 2; page <= totalPages; page += 1) {
+    restPages.push(await fetchSectorPage(typeCode, sectorType, page).catch(() => ({ rows: [], total: 0 })));
+    await sleep(120);
+  }
+
+  const map = new Map();
+  for (const item of [...firstPage.rows, ...restPages.flatMap((page) => page.rows)]) {
+    if (item.sector_id) map.set(item.sector_id, item);
+  }
+  return Array.from(map.values());
 };
 
 const fetchFundTopicFromSupabase = async () => {

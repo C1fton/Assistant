@@ -60,23 +60,9 @@ const fetchJson = async (url, retries = 3) => {
   throw lastError || new Error('Request failed');
 };
 
-const fetchSectorList = async (typeCode, sectorType) => {
-  const params = new URLSearchParams({
-    pn: '1',
-    pz: '500',
-    po: '1',
-    np: '1',
-    fltt: '2',
-    invt: '2',
-    fid: 'f3',
-    fs: `m:90+t:${typeCode}`,
-    fields: 'f12,f14,f3,f62'
-  });
-  const payload = await fetchJson(`https://push2delay.eastmoney.com/api/qt/clist/get?${params.toString()}`);
-  const rows = payload?.data?.diff;
+const normalizeSectorRows = (rows, sectorType) => {
   if (!isArray(rows)) return [];
   const now = new Date().toISOString();
-
   return rows
     .map((item) => ({
       update_at: now,
@@ -88,6 +74,42 @@ const fetchSectorList = async (typeCode, sectorType) => {
       change_pct: item.f3 != null && Number.isFinite(Number(item.f3)) ? Number(item.f3) : 0
     }))
     .filter((item) => item.sector_id && item.sector_name);
+};
+
+const fetchSectorPage = async (typeCode, sectorType, page = 1) => {
+  const params = new URLSearchParams({
+    pn: String(page),
+    pz: '100',
+    po: '1',
+    np: '1',
+    fltt: '2',
+    invt: '2',
+    fid: 'f3',
+    fs: `m:90+t:${typeCode}`,
+    fields: 'f12,f14,f3,f62'
+  });
+  const payload = await fetchJson(`https://push2delay.eastmoney.com/api/qt/clist/get?${params.toString()}`);
+  const rows = payload?.data?.diff;
+  const total = payload?.data?.total != null && Number.isFinite(Number(payload.data.total)) ? Number(payload.data.total) : 0;
+  return { rows: normalizeSectorRows(rows, sectorType), total };
+};
+
+const fetchSectorList = async (typeCode, sectorType) => {
+  const firstPage = await fetchSectorPage(typeCode, sectorType, 1);
+  const totalPages = Math.min(8, Math.max(1, Math.ceil((firstPage.total || firstPage.rows.length) / 100)));
+  if (totalPages <= 1) return firstPage.rows;
+
+  const restPages = [];
+  for (let page = 2; page <= totalPages; page += 1) {
+    restPages.push(await fetchSectorPage(typeCode, sectorType, page).catch(() => ({ rows: [], total: 0 })));
+    await sleep(120);
+  }
+
+  const map = new Map();
+  for (const item of [...firstPage.rows, ...restPages.flatMap((page) => page.rows)]) {
+    if (item.sector_id) map.set(item.sector_id, item);
+  }
+  return Array.from(map.values());
 };
 
 const upsertRows = async (rows) => {

@@ -12,10 +12,29 @@ const corsHeaders = {
 
 type SectorType = 'industry' | 'concept';
 
-const fetchMarketSectorList = async (typeCode: number, sectorType: SectorType) => {
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const normalizeSectorRows = (rows: unknown, sectorType: SectorType) => {
+  if (!Array.isArray(rows)) return [];
+  const now = new Date().toISOString();
+
+  return rows
+    .map((item: Record<string, unknown>) => ({
+      update_at: now,
+      sector_type: sectorType,
+      sector_id: item.f12 != null ? String(item.f12) : '',
+      sector_name: item.f14 != null ? String(item.f14) : '',
+      update_frequency: '15m',
+      net_inflow: item.f62 != null && Number.isFinite(Number(item.f62)) ? Math.round(Number(item.f62)) : 0,
+      change_pct: item.f3 != null && Number.isFinite(Number(item.f3)) ? Number(item.f3) : 0
+    }))
+    .filter((item) => item.sector_id && item.sector_name);
+};
+
+const fetchMarketSectorPage = async (typeCode: number, sectorType: SectorType, page = 1) => {
   const params = new URLSearchParams({
-    pn: '1',
-    pz: '500',
+    pn: String(page),
+    pz: '100',
     po: '1',
     np: '1',
     fltt: '2',
@@ -36,20 +55,26 @@ const fetchMarketSectorList = async (typeCode: number, sectorType: SectorType) =
   if (!response.ok) throw new Error(`Eastmoney sector request failed: ${response.status}`);
 
   const payload = await response.json();
-  const rows = Array.isArray(payload?.data?.diff) ? payload.data.diff : [];
-  const now = new Date().toISOString();
+  const total = payload?.data?.total != null && Number.isFinite(Number(payload.data.total)) ? Number(payload.data.total) : 0;
+  return { rows: normalizeSectorRows(payload?.data?.diff, sectorType), total };
+};
 
-  return rows
-    .map((item: Record<string, unknown>) => ({
-      update_at: now,
-      sector_type: sectorType,
-      sector_id: item.f12 != null ? String(item.f12) : '',
-      sector_name: item.f14 != null ? String(item.f14) : '',
-      update_frequency: '15m',
-      net_inflow: item.f62 != null && Number.isFinite(Number(item.f62)) ? Math.round(Number(item.f62)) : 0,
-      change_pct: item.f3 != null && Number.isFinite(Number(item.f3)) ? Number(item.f3) : 0
-    }))
-    .filter((item) => item.sector_id && item.sector_name);
+const fetchMarketSectorList = async (typeCode: number, sectorType: SectorType) => {
+  const firstPage = await fetchMarketSectorPage(typeCode, sectorType, 1);
+  const totalPages = Math.min(8, Math.max(1, Math.ceil((firstPage.total || firstPage.rows.length) / 100)));
+  if (totalPages <= 1) return firstPage.rows;
+
+  const restPages = [];
+  for (let page = 2; page <= totalPages; page += 1) {
+    restPages.push(await fetchMarketSectorPage(typeCode, sectorType, page).catch(() => ({ rows: [], total: 0 })));
+    await sleep(120);
+  }
+
+  const map = new Map<string, Record<string, unknown>>();
+  for (const item of [...firstPage.rows, ...restPages.flatMap((page) => page.rows)]) {
+    if (item.sector_id) map.set(String(item.sector_id), item);
+  }
+  return Array.from(map.values());
 };
 
 const upsertInChunks = async (supabase: ReturnType<typeof createClient>, rows: Record<string, unknown>[]) => {

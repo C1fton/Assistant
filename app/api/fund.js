@@ -2495,11 +2495,23 @@ const fetchJsonp = (rawUrl, callbackParam = 'callback', timeoutMs = 10000) => {
   });
 };
 
-const fetchMarketSectorList = async (typeCode, sectorType) => {
+const normalizeMarketSectorRows = (rows, sectorType) => {
+  if (!isArray(rows)) return [];
+  return rows.map((item) => ({
+    id: `${sectorType}-${item.f12}`,
+    sector_id: item.f12 != null ? String(item.f12) : '',
+    sector_name: item.f14 != null ? String(item.f14) : '',
+    sector_type: sectorType,
+    change_pct: item.f3 != null && Number.isFinite(Number(item.f3)) ? Number(item.f3) : 0,
+    net_inflow: item.f62 != null && Number.isFinite(Number(item.f62)) ? Number(item.f62) : 0
+  }));
+};
+
+const fetchMarketSectorPage = async (typeCode, sectorType, page = 1) => {
   if (typeof fetch === 'undefined') return [];
   const params = new URLSearchParams({
-    pn: '1',
-    pz: '500',
+    pn: String(page),
+    pz: '100',
     po: '1',
     np: '1',
     fltt: '2',
@@ -2509,19 +2521,30 @@ const fetchMarketSectorList = async (typeCode, sectorType) => {
     fields: 'f12,f14,f3,f62'
   });
   const response = await fetch(`https://push2delay.eastmoney.com/api/qt/clist/get?${params.toString()}`);
-  if (!response.ok) return [];
+  if (!response.ok) return { rows: [], total: 0 };
   const payload = await response.json();
   const rows = payload?.data?.diff;
-  if (!isArray(rows)) return [];
+  const total =
+    payload?.data?.total != null && Number.isFinite(Number(payload.data.total)) ? Number(payload.data.total) : 0;
+  return { rows: normalizeMarketSectorRows(rows, sectorType), total };
+};
 
-  return rows.map((item) => ({
-    id: `${sectorType}-${item.f12}`,
-    sector_id: item.f12 != null ? String(item.f12) : '',
-    sector_name: item.f14 != null ? String(item.f14) : '',
-    sector_type: sectorType,
-    change_pct: item.f3 != null && Number.isFinite(Number(item.f3)) ? Number(item.f3) : 0,
-    net_inflow: item.f62 != null && Number.isFinite(Number(item.f62)) ? Number(item.f62) : 0
-  }));
+const fetchMarketSectorList = async (typeCode, sectorType) => {
+  const firstPage = await fetchMarketSectorPage(typeCode, sectorType, 1);
+  const totalPages = Math.min(8, Math.max(1, Math.ceil((firstPage.total || firstPage.rows.length) / 100)));
+  if (totalPages <= 1) return firstPage.rows;
+
+  const restPages = await Promise.all(
+    Array.from({ length: totalPages - 1 }).map((_, index) =>
+      fetchMarketSectorPage(typeCode, sectorType, index + 2).catch(() => ({ rows: [], total: 0 }))
+    )
+  );
+
+  const map = new Map();
+  for (const item of [...firstPage.rows, ...restPages.flatMap((page) => page.rows)]) {
+    if (item.sector_id) map.set(item.sector_id, item);
+  }
+  return Array.from(map.values());
 };
 
 const fetchMarketSectorsFromSupabase = async () => {
