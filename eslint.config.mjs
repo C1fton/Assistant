@@ -3,7 +3,7 @@ import prettierRecommended from 'eslint-plugin-prettier/recommended';
 
 const config = [
   {
-    ignores: ['.next/**', 'out/**', 'dist/**', 'coverage/**']
+    ignores: ['.next/**', 'out/**', 'dist/**', 'coverage/**', 'supabase/functions/**']
   },
   ...nextCoreWebVitals,
   prettierRecommended,

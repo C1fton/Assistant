@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "market:data": "node scripts/generate-market-data.mjs",
+    "market:sync-topic": "node scripts/sync-fund-topic.mjs",
     "start": "next start",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

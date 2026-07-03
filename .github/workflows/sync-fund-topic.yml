@@ -1,0 +1,31 @@
+name: Sync Fund Topic
+
+on:
+  schedule:
+    # A-share trading hours, every 15 minutes in China Standard Time.
+    - cron: '*/15 1-7 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_PROJECT_ID: ocvnwdbsekwjtzzfzyti
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SYNC_FUND_TOPIC_SECRET: ${{ secrets.SYNC_FUND_TOPIC_SECRET || '' }}
+    steps:
+      - name: Invoke sync-fund-topic
+        run: |
+          if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ] || [ -z "$SYNC_FUND_TOPIC_SECRET" ]; then
+            echo "Skip sync: NEXT_PUBLIC_SUPABASE_URL or SYNC_FUND_TOPIC_SECRET is missing."
+            exit 0
+          fi
+
+          curl --fail-with-body \
+            -X POST "$NEXT_PUBLIC_SUPABASE_URL/functions/v1/sync-fund-topic" \
+            -H "Content-Type: application/json" \
+            -H "x-sync-secret: $SYNC_FUND_TOPIC_SECRET" \
+            -d '{}'

@@ -1,0 +1,7 @@
+project_id = "ocvnwdbsekwjtzzfzyti"
+
+[functions.fund-valuation-ranking]
+verify_jwt = true
+
+[functions.sync-fund-topic]
+verify_jwt = false

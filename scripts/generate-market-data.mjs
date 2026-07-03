@@ -34,13 +34,25 @@ const commonHeaders = {
 };
 
 const rankingKey = ({ sort, order, page, pageSize }) => `${sort}:${order}:${page}:${pageSize}`;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const fetchJson = async (url) => {
-  const response = await fetch(url, { headers: commonHeaders });
-  if (!response.ok) {
-    throw new Error(`${response.status} ${response.statusText}`);
+const fetchJson = async (url, retries = 3) => {
+  let lastError = null;
+
+  for (let attempt = 0; attempt < retries; attempt += 1) {
+    try {
+      const response = await fetch(url, { headers: commonHeaders });
+      if (!response.ok) {
+        throw new Error(`${response.status} ${response.statusText}`);
+      }
+      return response.json();
+    } catch (error) {
+      lastError = error;
+      await sleep(500 + attempt * 700);
+    }
   }
-  return response.json();
+
+  throw lastError || new Error('Request failed');
 };
 
 const fetchRanking = async ({ sort, order, page, pageSize }) => {
@@ -87,15 +99,15 @@ const fetchSectorList = async (typeCode, sectorType) => {
 
 const fetchFundTopicFromSupabase = async () => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-  if (!supabaseUrl || !supabaseAnonKey) return [];
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+  if (!supabaseUrl || !supabaseKey) return [];
 
   try {
     const response = await fetch(`${supabaseUrl.replace(/\/$/, '')}/rest/v1/fund_topic?select=*`, {
       headers: {
         Accept: 'application/json',
-        apikey: supabaseAnonKey,
-        Authorization: `Bearer ${supabaseAnonKey}`
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`
       }
     });
     if (!response.ok) return [];
@@ -131,12 +143,21 @@ for (const tab of rankingTabs) {
 }
 
 const rankings = {};
-const rankingResults = await Promise.allSettled(
-  rankingRequests.map(async (request) => {
+const rankingResults = [];
+
+for (const request of rankingRequests) {
+  const result = await Promise.resolve()
+    .then(async () => {
     const data = await fetchRanking(request);
     rankings[rankingKey(request)] = data;
-  })
-);
+    })
+    .then(
+      () => ({ status: 'fulfilled' }),
+      (reason) => ({ status: 'rejected', reason })
+    );
+  rankingResults.push(result);
+  await sleep(250);
+}
 
 const supabaseSectors = await fetchFundTopicFromSupabase();
 const [industryResult, conceptResult] =
