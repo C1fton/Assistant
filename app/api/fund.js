@@ -2524,20 +2524,46 @@ const fetchMarketSectorList = async (typeCode, sectorType) => {
   }));
 };
 
+const fetchMarketSectorsFromSupabase = async () => {
+  if (!isSupabaseConfigured) return [];
+
+  try {
+    const { data, error } = await withRetry(() => supabase.from('fund_topic').select('*'));
+    if (error || !isArray(data)) return [];
+    return data
+      .map((item) => ({
+        id:
+          item?.id != null
+            ? String(item.id)
+            : `${item?.sector_type || 'sector'}-${item?.sector_id || item?.sector_name}`,
+        sector_id: item?.sector_id != null ? String(item.sector_id) : '',
+        sector_name: item?.sector_name != null ? String(item.sector_name) : '',
+        sector_type: item?.sector_type != null ? String(item.sector_type) : '',
+        change_pct: item?.change_pct != null && Number.isFinite(Number(item.change_pct)) ? Number(item.change_pct) : 0,
+        net_inflow: item?.net_inflow != null && Number.isFinite(Number(item.net_inflow)) ? Number(item.net_inflow) : 0
+      }))
+      .filter((item) => item.sector_name);
+  } catch {
+    return [];
+  }
+};
+
 export const fetchMarketSectors = async () => {
   const qc = getQueryClient();
   return qc.fetchQuery({
     queryKey: ['market-sector-list'],
     queryFn: async () => {
+      const supabaseSectors = await fetchMarketSectorsFromSupabase();
+      if (supabaseSectors.length > 0) return supabaseSectors;
+
+      const staticData = await loadStaticMarketData();
+      if (staticData.sectors.length > 0) return staticData.sectors;
+
       const [industries, concepts] = await Promise.all([
         fetchMarketSectorList(2, 'industry').catch(() => []),
         fetchMarketSectorList(3, 'concept').catch(() => [])
       ]);
-      const liveSectors = [...industries, ...concepts];
-      if (liveSectors.length > 0) return liveSectors;
-
-      const staticData = await loadStaticMarketData();
-      return staticData.sectors;
+      return [...industries, ...concepts];
     },
     staleTime: 2 * 60 * 1000
   });

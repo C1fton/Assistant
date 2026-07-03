@@ -1,10 +1,30 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import lodash from 'lodash';
 
 const { isArray, isObject } = lodash;
 
 const OUTPUT_FILE = path.join(process.cwd(), 'public', 'data', 'market-data.json');
+
+const loadLocalEnv = async () => {
+  const envPath = path.join(process.cwd(), '.env.local');
+  try {
+    const content = await readFile(envPath, 'utf8');
+    for (const line of content.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const index = trimmed.indexOf('=');
+      if (index <= 0) continue;
+      const key = trimmed.slice(0, index).trim();
+      const value = trimmed.slice(index + 1).trim().replace(/^['"]|['"]$/g, '');
+      if (key && process.env[key] == null) process.env[key] = value;
+    }
+  } catch {
+    // .env.local is optional in CI and local clones.
+  }
+};
+
+await loadLocalEnv();
 
 const commonHeaders = {
   Accept: 'application/json,text/plain,*/*',
@@ -65,6 +85,37 @@ const fetchSectorList = async (typeCode, sectorType) => {
   }));
 };
 
+const fetchFundTopicFromSupabase = async () => {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+  if (!supabaseUrl || !supabaseAnonKey) return [];
+
+  try {
+    const response = await fetch(`${supabaseUrl.replace(/\/$/, '')}/rest/v1/fund_topic?select=*`, {
+      headers: {
+        Accept: 'application/json',
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${supabaseAnonKey}`
+      }
+    });
+    if (!response.ok) return [];
+    const rows = await response.json();
+    if (!isArray(rows)) return [];
+    return rows
+      .map((item) => ({
+        id: item?.id != null ? String(item.id) : `${item?.sector_type || 'sector'}-${item?.sector_id || item?.sector_name}`,
+        sector_id: item?.sector_id != null ? String(item.sector_id) : '',
+        sector_name: item?.sector_name != null ? String(item.sector_name) : '',
+        sector_type: item?.sector_type != null ? String(item.sector_type) : '',
+        change_pct: item?.change_pct != null && Number.isFinite(Number(item.change_pct)) ? Number(item.change_pct) : 0,
+        net_inflow: item?.net_inflow != null && Number.isFinite(Number(item.net_inflow)) ? Number(item.net_inflow) : 0
+      }))
+      .filter((item) => item.sector_name);
+  } catch {
+    return [];
+  }
+};
+
 const rankingRequests = [];
 const rankingTabs = [
   { sort: 3, order: 'desc' },
@@ -87,15 +138,19 @@ const rankingResults = await Promise.allSettled(
   })
 );
 
-const [industryResult, conceptResult] = await Promise.allSettled([
-  fetchSectorList(2, 'industry'),
-  fetchSectorList(3, 'concept')
-]);
+const supabaseSectors = await fetchFundTopicFromSupabase();
+const [industryResult, conceptResult] =
+  supabaseSectors.length > 0
+    ? [{ status: 'fulfilled', value: [] }, { status: 'fulfilled', value: [] }]
+    : await Promise.allSettled([fetchSectorList(2, 'industry'), fetchSectorList(3, 'concept')]);
 
-const sectors = [
-  ...(industryResult.status === 'fulfilled' ? industryResult.value : []),
-  ...(conceptResult.status === 'fulfilled' ? conceptResult.value : [])
-];
+const sectors =
+  supabaseSectors.length > 0
+    ? supabaseSectors
+    : [
+        ...(industryResult.status === 'fulfilled' ? industryResult.value : []),
+        ...(conceptResult.status === 'fulfilled' ? conceptResult.value : [])
+      ];
 
 const output = {
   generatedAt: new Date().toISOString(),
@@ -111,5 +166,5 @@ await mkdir(path.dirname(OUTPUT_FILE), { recursive: true });
 await writeFile(OUTPUT_FILE, `${JSON.stringify(output)}\n`, 'utf8');
 
 console.log(
-  `Generated market data: ${Object.keys(rankings).length}/${rankingRequests.length} rankings, ${sectors.length} sectors`
+  `Generated market data: ${Object.keys(rankings).length}/${rankingRequests.length} rankings, ${sectors.length} sectors (${supabaseSectors.length > 0 ? 'supabase fund_topic' : 'eastmoney fallback'})`
 );

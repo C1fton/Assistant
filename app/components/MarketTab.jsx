@@ -92,7 +92,8 @@ export default function MarketTab({ onAddFund, getFundCardProps, isActive }) {
 
   const [activeTab, setActiveTab] = useState('increase'); // increase, decrease, hot
   const [sectorFilter, setSectorFilter] = useState('industry'); // industry, concept
-  const [sectorView, setSectorView] = useState('balanced'); // balanced, strong, weak, flow
+  const [sectorSort, setSectorSort] = useState('change_pct'); // change_pct, net_inflow
+  const [sectorSortOrder, setSectorSortOrder] = useState('desc'); // desc, asc
   const user = useUserStore((s) => s.user);
   const isMobile = useIsMobile();
 
@@ -117,33 +118,14 @@ export default function MarketTab({ onAddFund, getFundCardProps, isActive }) {
       result = result.filter((s) => s.sector_type === sectorFilter);
     }
 
-    const limit = isMobile ? 4 : 10;
-    const byChangeDesc = [...result].sort((a, b) => (b.change_pct || 0) - (a.change_pct || 0));
-    const byChangeAsc = [...result].sort((a, b) => (a.change_pct || 0) - (b.change_pct || 0));
+    result = [...result].sort((a, b) => {
+      const valA = a[sectorSort] || 0;
+      const valB = b[sectorSort] || 0;
+      return sectorSortOrder === 'desc' ? valB - valA : valA - valB;
+    });
 
-    if (sectorView === 'strong') {
-      return byChangeDesc.slice(0, limit);
-    }
-
-    if (sectorView === 'weak') {
-      return byChangeAsc.slice(0, limit);
-    }
-
-    if (sectorView === 'flow') {
-      return [...result].sort((a, b) => (b.net_inflow || 0) - (a.net_inflow || 0)).slice(0, limit);
-    }
-
-    const strongCount = Math.ceil(limit / 2);
-    const strong = byChangeDesc.slice(0, strongCount);
-    const strongIds = new Set(strong.map((item) => item.id || item.sector_id));
-    const weak = byChangeAsc
-      .filter((item) => !strongIds.has(item.id || item.sector_id))
-      .slice(0, limit - strong.length);
-    return [...strong, ...weak];
-  }, [sectorEstimates, sectorFilter, sectorView, isMobile]);
-
-  const sectorModalSort = sectorView === 'flow' ? 'net_inflow' : 'change_pct';
-  const sectorModalSortOrder = sectorView === 'weak' ? 'asc' : 'desc';
+    return result.slice(0, isMobile ? 4 : 10);
+  }, [sectorEstimates, sectorFilter, sectorSort, sectorSortOrder, isMobile]);
 
   // Query for Valuation Ranking
   const { data: rankingData, isLoading: rankingLoading } = useQuery({
@@ -363,33 +345,64 @@ export default function MarketTab({ onAddFund, getFundCardProps, isActive }) {
 
                   <ToggleGroup
                     type="single"
-                    value={sectorView}
-                    onValueChange={(v) => v && setSectorView(v)}
+                    value={sectorSort}
+                    onValueChange={(v) => {
+                      if (!v) {
+                        setSectorSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'));
+                      } else {
+                        setSectorSort(v);
+                        setSectorSortOrder('desc');
+                      }
+                    }}
                     className="bg-black/5 dark:bg-white/10 p-0.5 rounded-md border border-black/5 dark:border-white/5 gap-0 shadow-inner"
                   >
                     <ToggleGroupItem
-                      value="balanced"
-                      className="h-6 px-2 text-[10px] rounded-sm border-0 bg-transparent text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm transition-all cursor-pointer"
+                      value="change_pct"
+                      className="h-6 px-2 text-[10px] flex items-center gap-0.5 rounded-sm border-0 bg-transparent text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm transition-all cursor-pointer"
                     >
-                      强弱
+                      按涨幅
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          flexDirection: 'column',
+                          lineHeight: 1,
+                          fontSize: '8px',
+                          transform: 'scale(0.8)',
+                          transformOrigin: 'center',
+                          opacity: sectorSort === 'change_pct' ? 1 : 0.3
+                        }}
+                      >
+                        <span style={{ opacity: sectorSort === 'change_pct' && sectorSortOrder === 'asc' ? 1 : 0.3 }}>
+                          ▲
+                        </span>
+                        <span style={{ opacity: sectorSort === 'change_pct' && sectorSortOrder === 'desc' ? 1 : 0.3 }}>
+                          ▼
+                        </span>
+                      </span>
                     </ToggleGroupItem>
                     <ToggleGroupItem
-                      value="strong"
-                      className="h-6 px-2 text-[10px] rounded-sm border-0 bg-transparent text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm transition-all cursor-pointer"
+                      value="net_inflow"
+                      className="h-6 px-2 text-[10px] flex items-center gap-0.5 rounded-sm border-0 bg-transparent text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm transition-all cursor-pointer"
                     >
-                      强势
-                    </ToggleGroupItem>
-                    <ToggleGroupItem
-                      value="weak"
-                      className="h-6 px-2 text-[10px] rounded-sm border-0 bg-transparent text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm transition-all cursor-pointer"
-                    >
-                      弱势
-                    </ToggleGroupItem>
-                    <ToggleGroupItem
-                      value="flow"
-                      className="h-6 px-2 text-[10px] rounded-sm border-0 bg-transparent text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm transition-all cursor-pointer"
-                    >
-                      资金
+                      按资金流入
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          flexDirection: 'column',
+                          lineHeight: 1,
+                          fontSize: '8px',
+                          transform: 'scale(0.8)',
+                          transformOrigin: 'center',
+                          opacity: sectorSort === 'net_inflow' ? 1 : 0.3
+                        }}
+                      >
+                        <span style={{ opacity: sectorSort === 'net_inflow' && sectorSortOrder === 'asc' ? 1 : 0.3 }}>
+                          ▲
+                        </span>
+                        <span style={{ opacity: sectorSort === 'net_inflow' && sectorSortOrder === 'desc' ? 1 : 0.3 }}>
+                          ▼
+                        </span>
+                      </span>
                     </ToggleGroupItem>
                   </ToggleGroup>
                 </div>
@@ -399,8 +412,8 @@ export default function MarketTab({ onAddFund, getFundCardProps, isActive }) {
                     useModalStore.setState({
                       allSectorsModalOpen: true,
                       allSectorsFilter: sectorFilter,
-                      allSectorsSort: sectorModalSort,
-                      allSectorsSortOrder: sectorModalSortOrder
+                      allSectorsSort: sectorSort,
+                      allSectorsSortOrder: sectorSortOrder
                     })
                   }
                 >
@@ -447,7 +460,7 @@ export default function MarketTab({ onAddFund, getFundCardProps, isActive }) {
                           >
                             <div className="market-sector-main">
                               <span className="market-sector-name">{sector.sector_name}</span>
-                              {sectorView !== 'flow' ? (
+                              {sectorSort === 'change_pct' ? (
                                 <span className={cn('market-sector-pct', getColorClass(pctStr))}>
                                   {formatPercent(pctStr)}
                                 </span>
@@ -458,7 +471,7 @@ export default function MarketTab({ onAddFund, getFundCardProps, isActive }) {
                               )}
                             </div>
                             <div className="market-sector-leader">
-                              {sectorView !== 'flow' ? (
+                              {sectorSort === 'change_pct' ? (
                                 <>
                                   资金流入:{' '}
                                   {sector.net_inflow ? (sector.net_inflow / 100000000).toFixed(2) + '亿' : '--'}

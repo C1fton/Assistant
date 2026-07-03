@@ -4,8 +4,8 @@ on:
   push:
     branches: ['main']
   schedule:
-    # A-share trading hours, every 30 minutes in China Standard Time.
-    - cron: '0,30 1-7 * * 1-5'
+    # A-share trading hours, every 15 minutes in China Standard Time.
+    - cron: '*/15 1-7 * * 1-5'
   workflow_dispatch:
 
 permissions:
@@ -35,6 +35,9 @@ jobs:
 
       - name: Generate market data
         run: npm run market:data
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
 
       - name: Build with Next.js
         run: npm run build
