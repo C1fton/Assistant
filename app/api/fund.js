@@ -68,6 +68,7 @@ const fundSecidsQueue = new Set(); // Set(label)
 let fundSecidsTimeout = null;
 
 let staticFundSectorMapPromise = null;
+let staticMarketDataPromise = null;
 
 const loadStaticFundSectorMap = async () => {
   if (staticFundSectorMapPromise) return staticFundSectorMapPromise;
@@ -84,6 +85,23 @@ const loadStaticFundSectorMap = async () => {
     .catch(() => ({ fundRelated: {}, sectorSecids: {} }));
 
   return staticFundSectorMapPromise;
+};
+
+const loadStaticMarketData = async () => {
+  if (staticMarketDataPromise) return staticMarketDataPromise;
+  if (typeof fetch === 'undefined' || typeof document === 'undefined') {
+    return { rankings: {}, sectors: [] };
+  }
+
+  staticMarketDataPromise = fetch(new URL('data/market-data.json', document.baseURI).toString())
+    .then((response) => (response.ok ? response.json() : null))
+    .then((data) => ({
+      rankings: isObject(data?.rankings) ? data.rankings : {},
+      sectors: isArray(data?.sectors) ? data.sectors : []
+    }))
+    .catch(() => ({ rankings: {}, sectors: [] }));
+
+  return staticMarketDataPromise;
 };
 
 const processRelatedSectorsQueue = async () => {
@@ -2515,7 +2533,11 @@ export const fetchMarketSectors = async () => {
         fetchMarketSectorList(2, 'industry').catch(() => []),
         fetchMarketSectorList(3, 'concept').catch(() => [])
       ]);
-      return [...industries, ...concepts];
+      const liveSectors = [...industries, ...concepts];
+      if (liveSectors.length > 0) return liveSectors;
+
+      const staticData = await loadStaticMarketData();
+      return staticData.sectors;
     },
     staleTime: 2 * 60 * 1000
   });
@@ -2535,6 +2557,10 @@ export const fetchFundValuationRanking = async (sort = 3, order = 'desc', page =
     }
   }
 
+  const staticData = await loadStaticMarketData();
+  const staticRanking = staticData.rankings?.[`${sort}:${order}:${page}:${pageSize}`];
+  if (staticRanking?.Data?.list) return staticRanking;
+
   const params = new URLSearchParams({
     type: '1',
     sort: String(sort),
@@ -2547,7 +2573,7 @@ export const fetchFundValuationRanking = async (sort = 3, order = 'desc', page =
     `https://api.fund.eastmoney.com/FundGuZhi/GetFundGZList?${params.toString()}`,
     'callback'
   );
-  return data?.Data ? data : null;
+  return data?.ErrCode === 0 && data?.Data ? data : null;
 };
 
 /**

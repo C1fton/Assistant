@@ -4615,7 +4615,7 @@ export default function HomePage() {
                 fundsLength={funds.length}
                 refreshCycleStartRef={refreshCycleStartRef}
               />
-              {isMobile && <AIAnalysisTrigger />}
+              <AIAnalysisTrigger />
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button

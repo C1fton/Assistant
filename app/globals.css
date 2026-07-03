@@ -4745,7 +4745,7 @@ html::-webkit-scrollbar-thumb:active,
     0 4px 12px rgba(0, 0, 0, 0.2);
 
   width: 68px;
-  height: 134px;
+  height: 202px;
   overflow: hidden;
   transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -5249,7 +5249,7 @@ html::-webkit-scrollbar-thumb:active,
     backdrop-filter: blur(8px) !important;
   }
 
-[data-theme='light'] .trend-tooltip-desktop {
+  [data-theme='light'] .trend-tooltip-desktop {
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.2)) !important;
     backdrop-filter: blur(2px) !important;
   }
