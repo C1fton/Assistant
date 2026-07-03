@@ -1,13 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Brain, TrendingUp, Newspaper, AlertTriangle, RefreshCw, Settings, Loader2 } from 'lucide-react';
+import { Brain, TrendingUp, Newspaper, AlertTriangle, RefreshCw, Settings, Loader2, History } from 'lucide-react';
+import { isArray, isObject } from 'lodash';
 import { storageStore, useStorageStore } from '@/app/stores/storageStore';
 import { useModalStore } from '@/app/stores/modalStore';
 import { callLLM, renderPrompt, PROMPT_TEMPLATES } from '@/app/lib/llmService';
+import { fetchFundValuationRanking, fetchMarketSectors } from '@/app/api/fund';
+import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 const renderInlineMarkdown = (text) => {
@@ -153,7 +156,19 @@ const AI_RESULT_DEFAULTS = {
   recommendation: '',
   market: '',
   risk: '',
-  rebalance: ''
+  rebalance: '',
+  review: ''
+};
+
+const AI_HISTORY_MAX = 20;
+
+const AI_TYPE_LABELS = {
+  analysis: '持仓分析',
+  recommendation: '基金推荐',
+  market: '市场解读',
+  risk: '风险预警',
+  rebalance: '调仓建议',
+  review: '历史复盘'
 };
 
 const getSavedAIResults = () => {
@@ -162,6 +177,16 @@ const getSavedAIResults = () => {
     return storageStore.getItem('ai_analysis_results', null);
   } catch {
     return null;
+  }
+};
+
+const getSavedAIHistory = () => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const saved = storageStore.getItem('ai_analysis_history', []);
+    return isArray(saved) ? saved : [];
+  } catch {
+    return [];
   }
 };
 
@@ -189,12 +214,27 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
   const [activeTab, setActiveTab] = useState('analysis');
   const [loadingType, setLoadingType] = useState('');
   const [results, setResults] = useState(() => ({ ...AI_RESULT_DEFAULTS, ...(getSavedAIResults() || {}) }));
+  const [history, setHistory] = useState(getSavedAIHistory);
   const [riskPreference, setRiskPreference] = useState('moderate');
 
   // 从store获取持仓和基金数据
   const holdings = useStorageStore((state) => state.holdings);
   const funds = useStorageStore((state) => state.funds);
   const groups = useStorageStore((state) => state.groups);
+
+  const { data: marketSectors } = useQuery({
+    queryKey: ['ai-market-sectors'],
+    queryFn: fetchMarketSectors,
+    enabled: !!open,
+    staleTime: 120000
+  });
+
+  const { data: valuationRanking } = useQuery({
+    queryKey: ['ai-valuation-ranking'],
+    queryFn: () => fetchFundValuationRanking(3, 'desc', 1, 20),
+    enabled: !!open,
+    staleTime: 120000
+  });
 
   useEffect(() => {
     try {
@@ -204,22 +244,97 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
     }
   }, [results]);
 
-  const toNumber = (value, fallback = null) => {
+  useEffect(() => {
+    try {
+      storageStore.setItem('ai_analysis_history', JSON.stringify(history.slice(0, AI_HISTORY_MAX)));
+    } catch {
+      // ignore local persistence errors
+    }
+  }, [history]);
+
+  const toNumber = useCallback((value, fallback = null) => {
     const n = Number(value);
     return Number.isFinite(n) ? n : fallback;
-  };
+  }, []);
 
-  const getCurrentNav = (fund) => {
-    if (!fund) return null;
-    const estimateNav = fund.noValuation ? null : toNumber(fund.gsz);
-    return estimateNav ?? toNumber(fund.dwjz);
-  };
+  const getCurrentNav = useCallback(
+    (fund) => {
+      if (!fund) return null;
+      const estimateNav = fund.noValuation ? null : toNumber(fund.gsz);
+      return estimateNav ?? toNumber(fund.dwjz);
+    },
+    [toNumber]
+  );
 
-  const getChangePercent = (fund) => {
-    if (!fund) return null;
-    const estimateChange = fund.noValuation ? null : toNumber(fund.gszzl);
-    return estimateChange ?? toNumber(fund.zzl);
-  };
+  const getChangePercent = useCallback(
+    (fund) => {
+      if (!fund) return null;
+      const estimateChange = fund.noValuation ? null : toNumber(fund.gszzl);
+      return estimateChange ?? toNumber(fund.zzl);
+    },
+    [toNumber]
+  );
+
+  const marketInsights = useMemo(() => {
+    const sectorList = isArray(marketSectors) ? marketSectors : [];
+    const rankingList = isArray(valuationRanking?.Data?.list) ? valuationRanking.Data.list : [];
+    const fundChanges = funds
+      .map((fund) => ({
+        code: fund?.code,
+        name: fund?.name,
+        changePercent: getChangePercent(fund),
+        amountHint: holdings?.[fund?.code]?.amount || null
+      }))
+      .filter((item) => item.changePercent != null);
+
+    const risingFunds = fundChanges.filter((item) => item.changePercent > 0).length;
+    const fallingFunds = fundChanges.filter((item) => item.changePercent < 0).length;
+    const avgFundChange =
+      fundChanges.length > 0
+        ? fundChanges.reduce((sum, item) => sum + Number(item.changePercent || 0), 0) / fundChanges.length
+        : 0;
+
+    const sectorChanges = sectorList.filter((sector) => sector?.change_pct != null);
+    const risingSectors = sectorChanges.filter((sector) => Number(sector.change_pct) > 0).length;
+    const fallingSectors = sectorChanges.filter((sector) => Number(sector.change_pct) < 0).length;
+    const sectorBreadth = sectorChanges.length > 0 ? risingSectors / sectorChanges.length : 0.5;
+    const fundBreadth = fundChanges.length > 0 ? risingFunds / fundChanges.length : 0.5;
+    const avgSectorChange =
+      sectorChanges.length > 0
+        ? sectorChanges.reduce((sum, sector) => sum + Number(sector.change_pct || 0), 0) / sectorChanges.length
+        : 0;
+
+    const rawScore =
+      50 + avgFundChange * 7 + avgSectorChange * 5 + (sectorBreadth - 0.5) * 35 + (fundBreadth - 0.5) * 25;
+    const temperatureScore = Math.max(0, Math.min(100, Math.round(rawScore)));
+    const temperatureLabel = temperatureScore >= 72 ? '偏热/进攻' : temperatureScore <= 38 ? '偏冷/防守' : '中性/震荡';
+
+    return {
+      generatedAt: new Date().toLocaleString(),
+      temperatureScore,
+      temperatureLabel,
+      breadth: {
+        funds: {
+          total: fundChanges.length,
+          rising: risingFunds,
+          falling: fallingFunds,
+          avgChange: avgFundChange.toFixed(2)
+        },
+        sectors: {
+          total: sectorChanges.length,
+          rising: risingSectors,
+          falling: fallingSectors,
+          avgChange: avgSectorChange.toFixed(2)
+        }
+      },
+      strongSectors: [...sectorChanges]
+        .sort((a, b) => Number(b.change_pct || 0) - Number(a.change_pct || 0))
+        .slice(0, 8),
+      weakSectors: [...sectorChanges].sort((a, b) => Number(a.change_pct || 0) - Number(b.change_pct || 0)).slice(0, 8),
+      inflowSectors: [...sectorList].sort((a, b) => Number(b.net_inflow || 0) - Number(a.net_inflow || 0)).slice(0, 8),
+      valuationLeaders: rankingList.slice(0, 12)
+    };
+  }, [funds, getChangePercent, holdings, marketSectors, valuationRanking]);
 
   // 格式化持仓数据，传给LLM
   const formatHoldingsData = () => {
@@ -248,26 +363,70 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
         previousDayChangePercent: toNumber(fund?.zzl),
         netValueDate: fund?.jzrq || '',
         estimateTime: fund?.gztime || fund?.time || '',
+        rawTags: fund?.tags || fund?.theme || '',
         theme: fund?.theme || fund?.tags || '未知'
       };
     });
 
     // 计算总持仓金额和各基金占比
     const totalAmount = holdingList.reduce((sum, item) => sum + Number(item.holdingAmount || 0), 0);
-    const holdingsWithRatio = holdingList.map((item) => ({
-      ...item,
-      ratio: totalAmount > 0 ? ((Number(item.holdingAmount || 0) / totalAmount) * 100).toFixed(2) + '%' : '0%'
-    }));
+    const holdingsWithRatio = holdingList.map((item) => {
+      const amount = Number(item.holdingAmount || 0);
+      const ratioValue = totalAmount > 0 ? (amount / totalAmount) * 100 : 0;
+      const change = toNumber(item.estimatedChangePercent ?? item.previousDayChangePercent, 0);
+      const tenPercentAmount = amount * 0.1;
+      const onePercentPortfolio = totalAmount * 0.01;
+      let actionHint = '持有观察';
+
+      if (ratioValue >= 18 && Math.abs(change) >= 2) {
+        actionHint = '高占比且波动较大，优先控制仓位，不宜追涨杀跌';
+      } else if (change <= -3 && ratioValue <= 10) {
+        actionHint = '小占比急跌，可评估分批低吸，单次不超过组合总额 1%';
+      } else if (change <= -3 && ratioValue > 10) {
+        actionHint = '已有一定仓位且急跌，优先暂停补仓，等待企稳信号';
+      } else if (change >= 3 && item.profitRate != null && item.profitRate >= 12) {
+        actionHint = '涨幅和盈利较高，可评估分批止盈 10%-20%';
+      } else if (change >= 2 && ratioValue < 6) {
+        actionHint = '小占比走强，可观察是否补到目标仓位';
+      }
+
+      return {
+        ...item,
+        ratioValue: Number(ratioValue.toFixed(2)),
+        ratio: totalAmount > 0 ? ratioValue.toFixed(2) + '%' : '0%',
+        decisionHints: {
+          actionHint,
+          portfolioOnePercentAmount: Number(onePercentPortfolio.toFixed(2)),
+          fundTenPercentAmount: Number(tenPercentAmount.toFixed(2)),
+          maxSingleActionSuggestion:
+            totalAmount > 0
+              ? '单只基金单日动作建议优先控制在组合总额 1%-3%，高波动基金更低'
+              : '缺少组合总额，建议只输出仓位百分比'
+        }
+      };
+    });
 
     const concentration = holdingsWithRatio
       .map((item) => ({ code: item.code, name: item.name, ratio: item.ratio, amount: item.holdingAmount }))
       .sort((a, b) => Number.parseFloat(b.ratio) - Number.parseFloat(a.ratio));
 
-    const themeExposure = holdingsWithRatio.reduce((acc, item) => {
-      const theme = String(item.theme || '未知');
-      acc[theme] = (acc[theme] || 0) + Number(item.holdingAmount || 0);
-      return acc;
-    }, {});
+    const buildExposure = (key) => {
+      const grouped = holdingsWithRatio.reduce((acc, item) => {
+        const label = String(item[key] || '未知');
+        acc[label] = (acc[label] || 0) + Number(item.holdingAmount || 0);
+        return acc;
+      }, {});
+      return Object.entries(grouped)
+        .map(([label, amount]) => ({
+          label,
+          amount: Number(amount.toFixed(2)),
+          ratio: totalAmount > 0 ? Number(((amount / totalAmount) * 100).toFixed(2)) : 0
+        }))
+        .sort((a, b) => b.amount - a.amount);
+    };
+
+    const topRatio = concentration[0] ? Number.parseFloat(concentration[0].ratio) : 0;
+    const top3Ratio = concentration.slice(0, 3).reduce((sum, item) => sum + Number.parseFloat(item.ratio || '0'), 0);
 
     return JSON.stringify(
       {
@@ -276,8 +435,15 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
         totalAmount: Number(totalAmount.toFixed(2)),
         fundCount: holdingList.length,
         groupCount: groups.length,
+        exposureSummary: {
+          topFundRatio: Number(topRatio.toFixed(2)),
+          top3FundRatio: Number(top3Ratio.toFixed(2)),
+          concentrationLevel:
+            topRatio >= 25 || top3Ratio >= 55 ? '高集中' : topRatio >= 15 || top3Ratio >= 40 ? '中等集中' : '分散',
+          typeExposure: buildExposure('type'),
+          themeExposure: buildExposure('theme')
+        },
         topConcentration: concentration.slice(0, 8),
-        themeExposure,
         holdings: holdingsWithRatio
       },
       null,
@@ -313,8 +479,9 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
 
     return JSON.stringify(
       {
-        source: '当前页面已加载基金估值/净值数据；不含外部新闻抓取',
+        source: '当前页面已加载基金估值/净值数据 + 行情页板块/估值榜静态兜底数据；不含外部新闻抓取',
         generatedAt: new Date().toLocaleString(),
+        marketTemperature: marketInsights,
         fundCount: funds.length,
         valuedFundCount: changedFunds.length,
         risingCount: changedFunds.filter((item) => item.changePercent > 0).length,
@@ -328,6 +495,42 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
       null,
       2
     );
+  };
+
+  const formatHistoryData = () => {
+    return JSON.stringify(
+      {
+        source: '用户本地保存的 AI 分析记录，仅用于复盘此前建议，不代表建议已执行。',
+        generatedAt: new Date().toLocaleString(),
+        historyCount: history.length,
+        recentHistory: history.slice(0, 10).map((item) => ({
+          type: item.type,
+          typeLabel: item.typeLabel,
+          generatedAt: item.generatedAt,
+          snapshot: item.snapshot,
+          contentExcerpt: String(item.content || '').slice(0, 2200)
+        }))
+      },
+      null,
+      2
+    );
+  };
+
+  const saveHistoryRecord = (type, content) => {
+    const record = {
+      id: `${Date.now()}-${type}`,
+      type,
+      typeLabel: AI_TYPE_LABELS[type] || type,
+      generatedAt: new Date().toLocaleString(),
+      snapshot: {
+        fundCount: funds.length,
+        holdingCount: Object.keys(isObject(holdings) ? holdings : {}).length,
+        marketTemperature: marketInsights.temperatureLabel,
+        marketTemperatureScore: marketInsights.temperatureScore
+      },
+      content
+    };
+    setHistory((prev) => [record, ...(isArray(prev) ? prev : [])].slice(0, AI_HISTORY_MAX));
   };
 
   // 执行分析
@@ -344,6 +547,7 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
     try {
       const holdingsData = formatHoldingsData();
       const marketData = getMarketData();
+      const historyData = formatHistoryData();
       let prompt;
 
       switch (type) {
@@ -370,6 +574,9 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
         case 'rebalance':
           prompt = renderPrompt(PROMPT_TEMPLATES.rebalanceAdvice, { holdingsData, marketData });
           break;
+        case 'review':
+          prompt = renderPrompt(PROMPT_TEMPLATES.historyReview, { holdingsData, marketData, historyData });
+          break;
         default:
           throw new Error('不支持的分析类型');
       }
@@ -384,6 +591,7 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
       ]);
 
       setResults((prev) => ({ ...prev, [type]: response }));
+      saveHistoryRecord(type, response);
     } catch (error) {
       toast.error('分析失败: ' + error.message);
     } finally {
@@ -406,7 +614,7 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 overflow-hidden flex flex-col">
-          <TabsList className="grid grid-cols-5 mb-4">
+          <TabsList className="grid grid-cols-6 mb-4">
             <TabsTrigger value="analysis" className="flex items-center gap-2">
               <TrendingUp className="h-4 w-4" />
               <span className="hidden sm:inline">持仓分析</span>
@@ -426,6 +634,10 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
             <TabsTrigger value="rebalance" className="flex items-center gap-2">
               <RefreshCw className="h-4 w-4" />
               <span className="hidden sm:inline">调仓建议</span>
+            </TabsTrigger>
+            <TabsTrigger value="review" className="flex items-center gap-2">
+              <History className="h-4 w-4" />
+              <span className="hidden sm:inline">复盘</span>
             </TabsTrigger>
           </TabsList>
 
@@ -511,7 +723,7 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
               <div className="ai-analysis-card">
                 <div className="ai-analysis-card-header">
                   <h3 className="ai-analysis-card-title">调仓建议</h3>
-                  <p className="ai-analysis-card-description">根据当前市场情况和持仓结构，给出具体的调仓优化建议</p>
+                  <p className="ai-analysis-card-description">输出逐基金、可量化、带触发条件的加仓/减仓/持有方案</p>
                 </div>
                 <div className="ai-analysis-card-content">
                   <Button onClick={() => handleAnalyze('rebalance')} disabled={!!loadingType} className="mb-4">
@@ -519,6 +731,56 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
                     获取建议
                   </Button>
                   <AnalysisResult content={results.rebalance} />
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="review" className="h-full mt-0">
+              <div className="ai-analysis-card">
+                <div className="ai-analysis-card-header">
+                  <h3 className="ai-analysis-card-title">历史复盘</h3>
+                  <p className="ai-analysis-card-description">保存每次 AI 建议，并结合当前组合与市场温度复盘此前判断</p>
+                </div>
+                <div className="ai-analysis-card-content">
+                  <div className="mb-4 flex flex-wrap gap-2">
+                    <Button onClick={() => handleAnalyze('review')} disabled={!!loadingType || history.length === 0}>
+                      {loadingType === 'review' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                      生成复盘
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={history.length === 0 || !!loadingType}
+                      onClick={() => setHistory([])}
+                    >
+                      清空历史
+                    </Button>
+                  </div>
+                  <AnalysisResult
+                    content={results.review}
+                    emptyText="生成过 AI 分析后，这里会保存历史记录并支持复盘。"
+                  />
+                  <div className="ai-history-list">
+                    {history.length === 0 ? (
+                      <div className="ai-report-empty">暂无历史建议。先在其他页签生成一次分析。</div>
+                    ) : (
+                      history.slice(0, 8).map((item) => (
+                        <details className="ai-history-item" key={item.id}>
+                          <summary>
+                            <span>{item.typeLabel}</span>
+                            <span>{item.generatedAt}</span>
+                            <span>
+                              {item.snapshot?.marketTemperature || '市场温度未知'}
+                              {item.snapshot?.marketTemperatureScore != null
+                                ? ` ${item.snapshot.marketTemperatureScore}`
+                                : ''}
+                            </span>
+                          </summary>
+                          <MarkdownReport content={item.content} />
+                        </details>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
             </TabsContent>

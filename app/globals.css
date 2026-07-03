@@ -5454,6 +5454,48 @@ html::-webkit-scrollbar-thumb:active,
   border-bottom: 0;
 }
 
+.ai-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.ai-history-item {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg) 84%, var(--card) 16%);
+}
+
+.ai-history-item summary {
+  display: grid;
+  grid-template-columns: minmax(78px, 0.8fr) minmax(120px, 1.2fr) minmax(110px, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  color: var(--foreground);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.ai-history-item .ai-report {
+  max-height: 320px;
+  margin-top: 0;
+  overflow-y: auto;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+}
+
+@media (max-width: 640px) {
+  .ai-history-item summary {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
+
 @media (max-width: 520px) {
   .llm-settings-field {
     grid-template-columns: 1fr;
