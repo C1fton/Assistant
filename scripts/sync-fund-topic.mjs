@@ -112,8 +112,24 @@ const fetchSectorList = async (typeCode, sectorType) => {
   return Array.from(map.values());
 };
 
+const dedupeRowsForUpsert = (rows) => {
+  const byName = new Map();
+  const byId = new Map();
+
+  for (const row of rows) {
+    if (!row?.sector_name || !row?.sector_id) continue;
+    byName.set(row.sector_name, row);
+  }
+
+  for (const row of byName.values()) {
+    byId.set(row.sector_id, row);
+  }
+
+  return Array.from(byId.values());
+};
+
 const upsertRows = async (rows) => {
-  const endpoint = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/fund_topic?on_conflict=sector_id`;
+  const endpoint = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/fund_topic?on_conflict=sector_name`;
   let updated = 0;
 
   for (let i = 0; i < rows.length; i += 100) {
@@ -140,7 +156,7 @@ const upsertRows = async (rows) => {
 };
 
 const [industries, concepts] = await Promise.all([fetchSectorList(2, 'industry'), fetchSectorList(3, 'concept')]);
-const rows = [...industries, ...concepts];
+const rows = dedupeRowsForUpsert([...industries, ...concepts]);
 const updated = await upsertRows(rows);
 
 console.log(`Synced fund_topic: ${updated} rows (${industries.length} industry, ${concepts.length} concept)`);
