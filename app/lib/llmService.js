@@ -54,17 +54,184 @@ const getClientStorageValue = (key) => {
   }
 };
 
-const normalizeBaseUrl = (baseUrl) => baseUrl.replace(/\/$/, '');
+const normalizeBaseUrl = (baseUrl) =>
+  String(baseUrl || '')
+    .trim()
+    .replace(/\/+$/, '');
 
-const getEndpoint = (baseUrl, provider) => {
+const uniq = (items) => [...new Set(items.filter(Boolean))];
+
+const getEndpointCandidates = (baseUrl, provider) => {
   const base = normalizeBaseUrl(baseUrl);
   if (provider === 'anthropic') {
-    return base.endsWith('/messages') ? base : base + '/messages';
+    return [base.endsWith('/messages') ? base : base + '/messages'];
   }
-  return base.endsWith('/chat/completions') ? base : base + '/chat/completions';
+  if (/\/(?:chat\/completions|completions)$/i.test(base)) {
+    return [base];
+  }
+  return uniq([base + '/chat/completions', /\/api\/coding\/v\d+$/i.test(base) ? base + '/completions' : '']);
 };
 
 const normalizeProvider = (provider) => (provider === 'anthropic' ? 'anthropic' : 'openai');
+
+const getMessageContent = (message) => String(message?.content || '').trim();
+
+const normalizeOpenAiMessages = (messages, foldSystem = false) => {
+  const normalMessages = messages
+    .filter((message) => message?.role !== 'system')
+    .map((message) => ({
+      role: message?.role === 'assistant' ? 'assistant' : 'user',
+      content: getMessageContent(message)
+    }))
+    .filter((message) => message.content);
+
+  if (!foldSystem) {
+    const systemMessages = messages
+      .filter((message) => message?.role === 'system')
+      .map((message) => ({ role: 'system', content: getMessageContent(message) }))
+      .filter((message) => message.content);
+    return [...systemMessages, ...normalMessages].length
+      ? [...systemMessages, ...normalMessages]
+      : [{ role: 'user', content: '请回复：连接成功' }];
+  }
+
+  const system = messages
+    .filter((message) => message?.role === 'system')
+    .map(getMessageContent)
+    .filter(Boolean)
+    .join('\n\n');
+
+  if (!system) return normalMessages.length ? normalMessages : [{ role: 'user', content: '请回复：连接成功' }];
+  if (!normalMessages.length) return [{ role: 'user', content: system }];
+  return [
+    {
+      ...normalMessages[0],
+      content: `${system}\n\n${normalMessages[0].content}`
+    },
+    ...normalMessages.slice(1)
+  ];
+};
+
+const openAiPayloadVariants = [
+  { name: 'standard', tokenKey: 'max_tokens', withTemperature: true, foldSystem: false },
+  { name: 'max_completion_tokens', tokenKey: 'max_completion_tokens', withTemperature: false, foldSystem: false },
+  { name: 'minimal', tokenKey: '', withTemperature: false, foldSystem: false },
+  { name: 'minimal_no_system', tokenKey: '', withTemperature: false, foldSystem: true }
+];
+
+const toOpenAiChatPayload = (messages, model, config, options, variant) => {
+  const payload = {
+    model,
+    messages: normalizeOpenAiMessages(messages, variant.foldSystem),
+    stream: false
+  };
+  if (variant.withTemperature) {
+    payload.temperature = options.temperature ?? config.temperature;
+  }
+  if (variant.tokenKey) {
+    payload[variant.tokenKey] = options.maxTokens ?? config.maxTokens;
+  }
+  return payload;
+};
+
+const toOpenAiCompletionPayload = (messages, model, config, options, variant) => {
+  const prompt = normalizeOpenAiMessages(messages, true)
+    .map((message) => `${message.role}: ${message.content}`)
+    .join('\n\n');
+  const payload = {
+    model,
+    prompt: prompt || '请回复：连接成功',
+    stream: false
+  };
+  if (variant.withTemperature) {
+    payload.temperature = options.temperature ?? config.temperature;
+  }
+  if (variant.tokenKey === 'max_tokens') {
+    payload.max_tokens = options.maxTokens ?? config.maxTokens;
+  }
+  return payload;
+};
+
+const parseOpenAiResult = (data) =>
+  data?.choices?.[0]?.message?.content?.trim() || data?.choices?.[0]?.text?.trim() || data?.output_text?.trim() || '';
+
+const readErrorMessage = async (response) => {
+  let message = 'API 调用失败: ' + response.status;
+  try {
+    const text = await response.text();
+    if (!text) return message;
+    try {
+      const error = JSON.parse(text);
+      message = error?.error?.message || error?.message || text.slice(0, 300) || message;
+    } catch {
+      message = text.slice(0, 300) || message;
+    }
+  } catch {
+    // ignore unreadable error body
+  }
+  return message;
+};
+
+const formatOpenAiErrors = (errors) => {
+  if (
+    errors.length &&
+    errors.every((item) => /Failed to fetch|Load failed|NetworkError|网络请求失败/i.test(item.message))
+  ) {
+    return '网络或跨域请求失败。如果 API 地址、模型和密钥都正确，说明该服务可能不允许浏览器/GitHub Pages 直连，需要改用支持 CORS 的网关或后端代理。';
+  }
+  const compact = errors
+    .map((item) => `${item.endpoint.replace(/^https?:\/\//, '')} [${item.variant}]：${item.message}`)
+    .slice(0, 4)
+    .join('；');
+  return compact || '请检查 API 配置';
+};
+
+const callOpenAiCompatible = async ({ messages, model, config, options, apiKey, baseUrl }) => {
+  const endpoints = getEndpointCandidates(baseUrl, 'openai');
+  const errors = [];
+
+  for (const endpoint of endpoints) {
+    const isCompletionEndpoint = /\/completions$/i.test(endpoint) && !/\/chat\/completions$/i.test(endpoint);
+    const variants = isCompletionEndpoint
+      ? openAiPayloadVariants.filter((variant) => variant.tokenKey !== 'max_completion_tokens')
+      : openAiPayloadVariants;
+
+    for (const variant of variants) {
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer ' + apiKey
+          },
+          body: JSON.stringify(
+            isCompletionEndpoint
+              ? toOpenAiCompletionPayload(messages, model, config, options, variant)
+              : toOpenAiChatPayload(messages, model, config, options, variant)
+          )
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          return parseOpenAiResult(data);
+        }
+
+        const message = await readErrorMessage(response);
+        errors.push({ endpoint, variant: variant.name, message });
+        if (response.status === 401 || response.status === 403) {
+          throw new Error(message);
+        }
+      } catch (error) {
+        errors.push({ endpoint, variant: variant.name, message: error?.message || '网络请求失败' });
+        if (error?.message && !/Failed to fetch|Load failed|NetworkError/i.test(error.message)) {
+          throw error;
+        }
+      }
+    }
+  }
+
+  throw new Error(formatOpenAiErrors(errors));
+};
 
 const toAnthropicPayload = (messages, model, config, options) => {
   const system = messages
@@ -113,56 +280,34 @@ export const callLLM = async (messages, options = {}) => {
   const model = options.model || defaultModel;
   const config = MODEL_CONFIG[model] || DEFAULT_MODEL_CONFIG;
 
-  const endpoint = getEndpoint(baseUrl, provider);
-  const response =
-    provider === 'anthropic'
-      ? await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': apiKey,
-            'anthropic-version': options.anthropicVersion || '2023-06-01',
-            'anthropic-dangerous-direct-browser-access': 'true'
-          },
-          body: JSON.stringify(toAnthropicPayload(messages, model, config, options))
-        })
-      : await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: 'Bearer ' + apiKey
-          },
-          body: JSON.stringify({
-            model,
-            messages,
-            temperature: options.temperature ?? config.temperature,
-            max_tokens: options.maxTokens ?? config.maxTokens,
-            stream: false
-          })
-        });
+  if (provider !== 'anthropic') {
+    return callOpenAiCompatible({ messages, model, config, options, apiKey, baseUrl });
+  }
+
+  const endpoint = getEndpointCandidates(baseUrl, provider)[0];
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': options.anthropicVersion || '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify(toAnthropicPayload(messages, model, config, options))
+  });
 
   if (!response.ok) {
-    let message = 'API 调用失败: ' + response.status;
-    try {
-      const error = await response.json();
-      message = error?.error?.message || message;
-    } catch {
-      // ignore non-json error body
-    }
-    throw new Error(message);
+    throw new Error(await readErrorMessage(response));
   }
 
   const data = await response.json();
-  if (provider === 'anthropic') {
-    return (
-      data?.content
-        ?.map((block) => (block?.type === 'text' ? block.text : ''))
-        .filter(Boolean)
-        .join('\n')
-        .trim() || ''
-    );
-  }
-  return data?.choices?.[0]?.message?.content?.trim() || '';
+  return (
+    data?.content
+      ?.map((block) => (block?.type === 'text' ? block.text : ''))
+      .filter(Boolean)
+      .join('\n')
+      .trim() || ''
+  );
 };
 
 const joinPrompt = (lines) => lines.join('\n');

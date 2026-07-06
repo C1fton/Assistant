@@ -22,9 +22,7 @@ const getSavedLLMValue = (key, fallback = '') => {
 export const LLMSettingModal = ({ open, onOpenChange }) => {
   const [provider, setProvider] = useState(() => getSavedLLMValue('llm_provider', 'openai'));
   const [apiKey, setApiKey] = useState(() => getSavedLLMValue('llm_api_key', ''));
-  const [baseUrl, setBaseUrl] = useState(() =>
-    getSavedLLMValue('llm_base_url', LLM_PROVIDERS.openai.defaultBaseUrl)
-  );
+  const [baseUrl, setBaseUrl] = useState(() => getSavedLLMValue('llm_base_url', LLM_PROVIDERS.openai.defaultBaseUrl));
   const [model, setModel] = useState(() => getSavedLLMValue('llm_model', LLM_PROVIDERS.openai.defaultModel));
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -135,7 +133,7 @@ export const LLMSettingModal = ({ open, onOpenChange }) => {
               className="llm-settings-input"
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}
-              placeholder="https://api.openai.com/v1"
+              placeholder="https://api.openai.com/v1 或 https://ark.cn-beijing.volces.com/api/coding/v3"
             />
           </div>
           <div className="llm-settings-field">
@@ -150,7 +148,7 @@ export const LLMSettingModal = ({ open, onOpenChange }) => {
               placeholder={
                 provider === 'anthropic'
                   ? '例如 claude-3-5-sonnet-latest / claude-3-haiku-20240307'
-                  : '例如 gpt-4o-mini / deepseek-chat / qwen-plus'
+                  : '例如 gpt-4o-mini / deepseek-chat / qwen-plus / ark-code-latest'
               }
             />
           </div>
@@ -158,7 +156,7 @@ export const LLMSettingModal = ({ open, onOpenChange }) => {
             <p>
               {provider === 'anthropic'
                 ? 'Anthropic 模式使用 /v1/messages、x-api-key 与 anthropic-version 请求 Claude。'
-                : 'OpenAI 兼容模式使用 /chat/completions，适用于 OpenAI、DeepSeek、通义千问、OpenRouter 等服务。'}
+                : 'OpenAI 兼容模式优先使用 /chat/completions，并会对火山 Ark Coding 等服务自动尝试兼容参数。API 地址填服务商提供的 base URL，通常不需要手动加 /chat/completions。'}
             </p>
             <p>密钥仅保存在当前浏览器，不会同步到 Supabase，也不会上传到 GitHub Pages。</p>
           </div>
