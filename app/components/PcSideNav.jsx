@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { motion, LayoutGroup, useReducedMotion } from 'framer-motion';
-import { Home, TrendingUp, ChevronRight, Brain } from 'lucide-react';
+import { Home, TrendingUp, ChevronRight, Brain, Calculator } from 'lucide-react';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useModalStore } from '../stores';
 
 const TABS = [
   { id: 'home', label: '首页', Icon: Home },
   { id: 'market', label: '行情', Icon: TrendingUp },
+  { id: 'etf', label: 'ETF', Icon: Calculator },
   { id: 'ai', label: 'AI建议', Icon: Brain, isAction: true }
 ];
 

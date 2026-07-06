@@ -48,10 +48,9 @@ import {
 } from './api/fund';
 import PcFundTable from './components/PcFundTable';
 import MobileFundTable from './components/MobileFundTable';
-import MobileBottomNav from './components/MobileBottomNav';
 import MineTab from './components/MineTab';
 import MarketTab from './components/MarketTab';
-import PcSideNav from './components/PcSideNav';
+import EtfGridTab from './components/EtfGridTab';
 import SearchFund from './components/SearchFund';
 import { useTheme } from './hooks/useTheme';
 import { useTradingDay } from './hooks/useTradingDay';
@@ -5265,6 +5264,7 @@ export default function HomePage() {
           )}
         </>
       </div>
+      {mainTab === 'etf' && <EtfGridTab />}
       {isMobile && (
         <MineTab
           visible={mainTab === 'mine'}

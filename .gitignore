@@ -96,3 +96,5 @@ cli/
 /.mcp.json
 /.codex/
 /jgb-cli/
+
+dev-server.*.log

@@ -5548,3 +5548,1039 @@ html::-webkit-scrollbar-thumb:active,
     flex-direction: column-reverse !important;
   }
 }
+
+/* ETF Grid Tab */
+.pc-side-nav {
+  height: 268px;
+}
+
+.etf-grid-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 40px;
+}
+
+.etf-grid-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border-radius: 16px;
+}
+
+.etf-grid-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.etf-grid-heading-icon {
+  display: inline-flex;
+  width: 42px;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  color: var(--primary);
+  background: rgba(34, 211, 238, 0.12);
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  flex: 0 0 auto;
+}
+
+.etf-grid-heading h1 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.2;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.etf-grid-heading p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: min(48vw, 560px);
+}
+
+.etf-grid-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.etf-grid-action-btn,
+.etf-grid-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.etf-grid-icon-btn {
+  width: 44px;
+  padding: 0;
+}
+
+.etf-grid-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.etf-grid-stat {
+  min-height: 86px;
+  padding: 14px;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.etf-grid-stat span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.etf-grid-stat strong {
+  font-size: 20px;
+  line-height: 1.1;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.etf-grid-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.etf-grid-settings {
+  padding: 16px;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: sticky;
+  top: 88px;
+}
+
+.etf-grid-section-title {
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.etf-grid-section-title:first-child {
+  margin-top: 0;
+}
+
+.etf-grid-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.etf-grid-field-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.etf-grid-input-shell {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  position: relative;
+}
+
+.etf-grid-input {
+  width: 100%;
+  padding-right: 44px;
+  font-variant-numeric: tabular-nums;
+}
+
+.etf-grid-input-no-suffix {
+  padding-right: 14px;
+}
+
+.etf-grid-input-suffix {
+  position: absolute;
+  right: 12px;
+  color: var(--muted);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.etf-grid-switch-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.etf-grid-switch-field {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(11, 18, 32, 0.55);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.etf-grid-source-link {
+  align-self: flex-start;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.etf-grid-source-link:hover {
+  color: var(--primary);
+}
+
+.etf-grid-table-card {
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.etf-grid-table-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.etf-grid-table-header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.etf-grid-table-header p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.etf-grid-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.etf-grid-table {
+  width: 100%;
+  min-width: 1180px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.etf-grid-table th,
+.etf-grid-table td {
+  padding: 12px 10px;
+  text-align: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.etf-grid-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--table-pinned-header-bg);
+  color: var(--text);
+  font-weight: 800;
+}
+
+.etf-grid-table tbody tr:nth-child(even) {
+  background: var(--table-row-alt-bg);
+}
+
+.etf-grid-table tbody tr:hover {
+  background: var(--table-row-hover-bg);
+}
+
+.etf-grid-row-middle {
+  box-shadow: inset 4px 0 0 rgba(34, 211, 238, 0.9);
+}
+
+.etf-grid-row-big {
+  box-shadow: inset 4px 0 0 rgba(248, 113, 113, 0.92);
+}
+
+.etf-grid-table tfoot td {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  font-weight: 800;
+}
+
+[data-theme='light'] .etf-grid-heading-icon {
+  background: rgba(8, 145, 178, 0.1);
+  border-color: rgba(8, 145, 178, 0.2);
+}
+
+[data-theme='light'] .etf-grid-switch-field {
+  background: rgba(255, 255, 255, 0.72);
+}
+
+[data-theme='light'] .etf-grid-table th {
+  background: #e2e8f0;
+}
+
+[data-theme='light'] .etf-grid-table tfoot td {
+  background: rgba(2, 132, 199, 0.08);
+}
+
+@media (max-width: 900px) {
+  .etf-grid-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .etf-grid-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .etf-grid-settings {
+    position: static;
+  }
+}
+
+@media (max-width: 640px) {
+  .etf-grid-tab {
+    padding-top: calc(12px + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(78px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .etf-grid-header {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 14px;
+  }
+
+  .etf-grid-actions {
+    width: 100%;
+  }
+
+  .etf-grid-action-btn {
+    flex: 1;
+  }
+
+  .etf-grid-heading h1 {
+    font-size: 18px;
+  }
+
+  .etf-grid-heading p {
+    max-width: calc(100vw - 112px);
+  }
+
+  .etf-grid-summary-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .etf-grid-stat {
+    min-height: 78px;
+  }
+
+  .etf-grid-stat strong {
+    font-size: 18px;
+  }
+
+  .etf-grid-table th,
+  .etf-grid-table td {
+    padding: 10px 8px;
+    font-size: 12px;
+  }
+}
+
+.mobile-bottom-nav-tab {
+  padding: 4px 18px 3px;
+}
+
+@media (max-width: 360px) {
+  .mobile-bottom-nav-tab {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+}
+
+.etf-grid-field-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.etf-grid-help-btn {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: help;
+  flex: 0 0 auto;
+}
+
+.etf-grid-help-btn:hover {
+  color: var(--primary);
+  background: rgba(34, 211, 238, 0.1);
+}
+
+.etf-grid-field-hint {
+  display: block;
+  margin-top: -2px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.etf-grid-switch-field > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.etf-grid-switch-field small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.3;
+  font-weight: 400;
+}
+
+.etf-grid-beginner-note {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(34, 211, 238, 0.2);
+  background: rgba(34, 211, 238, 0.08);
+  color: var(--text);
+}
+
+.etf-grid-beginner-note strong {
+  font-size: 12px;
+}
+
+.etf-grid-beginner-note span {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.etf-grid-analysis-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.etf-grid-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.etf-grid-section-header .etf-grid-section-title {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.etf-grid-analysis-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.etf-grid-section-suitability {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(11, 18, 32, 0.48);
+}
+
+.etf-grid-suitability-label {
+  color: var(--muted);
+}
+
+.etf-grid-suitability-score {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.etf-grid-suitability-score.high {
+  color: var(--gain);
+}
+
+.etf-grid-suitability-score.medium {
+  color: var(--primary);
+}
+
+.etf-grid-suitability-score.low {
+  color: var(--loss);
+}
+
+.etf-grid-refresh-btn {
+  height: 34px;
+  min-height: 34px;
+  padding: 0 12px;
+  gap: 6px;
+}
+
+.etf-grid-refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.etf-grid-spin {
+  animation: etf-grid-spin 0.8s linear infinite;
+}
+
+@keyframes etf-grid-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.etf-grid-analysis-empty {
+  min-height: 82px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.etf-grid-analysis-empty-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  color: var(--primary);
+  background: rgba(34, 211, 238, 0.1);
+  border: 1px solid rgba(34, 211, 238, 0.18);
+}
+
+.etf-grid-analysis-empty strong {
+  display: block;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.etf-grid-analysis-empty span:last-child {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.etf-grid-analysis-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.etf-grid-analysis-card {
+  min-height: 116px;
+  padding: 14px;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.etf-grid-analysis-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.etf-grid-analysis-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary);
+  background: rgba(34, 211, 238, 0.09);
+}
+
+.etf-grid-analysis-title {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.etf-grid-analysis-content {
+  min-width: 0;
+}
+
+.etf-grid-analysis-value {
+  color: var(--text);
+  font-size: 22px;
+  line-height: 1.15;
+  font-weight: 850;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.etf-grid-highlight {
+  color: var(--primary);
+}
+
+.etf-grid-analysis-desc {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.etf-grid-analysis-card.market-strong .etf-grid-analysis-icon,
+.etf-grid-analysis-card.market-strong .etf-grid-analysis-value {
+  color: var(--loss);
+}
+
+.etf-grid-analysis-card.market-weak .etf-grid-analysis-icon,
+.etf-grid-analysis-card.market-weak .etf-grid-analysis-value {
+  color: var(--gain);
+}
+
+.etf-grid-analysis-card.market-neutral .etf-grid-analysis-icon,
+.etf-grid-analysis-card.market-neutral .etf-grid-analysis-value {
+  color: var(--primary);
+}
+
+.etf-grid-suggestion-card {
+  padding: 16px;
+  border-radius: 16px;
+}
+
+.etf-grid-suggestion-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.etf-grid-suggestion-content {
+  margin-top: 10px;
+}
+
+.etf-grid-suggestion-main {
+  color: var(--primary);
+  font-size: 15px;
+  line-height: 1.55;
+  font-weight: 800;
+}
+
+.etf-grid-suggestion-list {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.etf-grid-suggestion-list li + li {
+  margin-top: 4px;
+}
+
+[data-theme='light'] .etf-grid-section-suitability {
+  background: rgba(255, 255, 255, 0.68);
+}
+
+[data-theme='light'] .etf-grid-analysis-empty-icon,
+[data-theme='light'] .etf-grid-analysis-icon {
+  background: rgba(8, 145, 178, 0.1);
+}
+
+@media (max-width: 900px) {
+  .etf-grid-analysis-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .etf-grid-section-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .etf-grid-analysis-toolbar {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .etf-grid-section-suitability {
+    height: 30px;
+  }
+
+  .etf-grid-refresh-btn {
+    height: 32px;
+    min-height: 32px;
+  }
+
+  .etf-grid-analysis-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .etf-grid-analysis-card {
+    min-height: 104px;
+  }
+
+  .etf-grid-analysis-value {
+    font-size: 20px;
+  }
+}
+
+[data-theme='light'] .etf-grid-beginner-note {
+  background: rgba(8, 145, 178, 0.08);
+  border-color: rgba(8, 145, 178, 0.18);
+}
+/* 折叠式行情分析列表 */
+.etf-grid-analysis-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.etf-grid-analysis-item {
+  border-radius: 16px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.etf-grid-analysis-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme='light'] .etf-grid-analysis-item:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.etf-grid-analysis-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.etf-grid-analysis-item-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.etf-grid-analysis-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary);
+  background: rgba(34, 211, 238, 0.09);
+  flex-shrink: 0;
+}
+
+.etf-grid-analysis-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.etf-grid-analysis-item-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.etf-grid-analysis-value {
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.15;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.etf-grid-highlight {
+  color: var(--primary);
+}
+
+.etf-grid-analysis-chevron {
+  color: var(--muted);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.etf-grid-analysis-chevron.expanded {
+  transform: rotate(180deg);
+}
+
+.etf-grid-analysis-item-content {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+[data-theme='light'] .etf-grid-analysis-item-content {
+  border-top-color: rgba(0, 0, 0, 0.06);
+}
+
+.etf-grid-analysis-desc {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.etf-grid-analysis-details {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.etf-grid-analysis-details li + li {
+  margin-top: 4px;
+}
+
+/* 市场环境颜色适配 */
+.etf-grid-analysis-item.market-strong .etf-grid-analysis-icon,
+.etf-grid-analysis-item.market-strong .etf-grid-analysis-value {
+  color: var(--loss);
+}
+
+.etf-grid-analysis-item.market-weak .etf-grid-analysis-icon,
+.etf-grid-analysis-item.market-weak .etf-grid-analysis-value {
+  color: var(--gain);
+}
+
+.etf-grid-analysis-item.market-neutral .etf-grid-analysis-icon,
+.etf-grid-analysis-item.market-neutral .etf-grid-analysis-value {
+  color: var(--primary);
+}
+
+/* 移动端适配 */
+@media (max-width: 640px) {
+  .etf-grid-analysis-item {
+    padding: 12px 14px;
+  }
+
+  .etf-grid-analysis-title {
+    font-size: 13px;
+  }
+
+  .etf-grid-analysis-value {
+    font-size: 15px;
+  }
+
+  .etf-grid-analysis-desc,
+  .etf-grid-analysis-details {
+    font-size: 12px;
+  }
+}
+
+/* 折叠式行情分析列表（覆盖旧样式） */
+.etf-grid-analysis-grid {
+  display: none !important;
+}
+.etf-grid-suggestion-card {
+  display: none !important;
+}
+
+.etf-grid-analysis-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.etf-grid-analysis-item {
+  border-radius: 16px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.etf-grid-analysis-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme='light'] .etf-grid-analysis-item:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.etf-grid-analysis-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.etf-grid-analysis-item-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.etf-grid-analysis-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary);
+  background: rgba(34, 211, 238, 0.09);
+  flex-shrink: 0;
+}
+
+.etf-grid-analysis-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.etf-grid-analysis-item-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.etf-grid-analysis-value {
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.15;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.etf-grid-highlight {
+  color: var(--primary);
+}
+
+.etf-grid-analysis-chevron {
+  color: var(--muted);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.etf-grid-analysis-chevron.expanded {
+  transform: rotate(180deg);
+}
+
+.etf-grid-analysis-item-content {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+[data-theme='light'] .etf-grid-analysis-item-content {
+  border-top-color: rgba(0, 0, 0, 0.06);
+}
+
+.etf-grid-analysis-desc {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.etf-grid-analysis-details {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.etf-grid-analysis-details li + li {
+  margin-top: 4px;
+}
+
+/* 市场环境颜色适配 */
+.etf-grid-analysis-item.market-strong .etf-grid-analysis-icon,
+.etf-grid-analysis-item.market-strong .etf-grid-analysis-value {
+  color: var(--loss);
+}
+
+.etf-grid-analysis-item.market-weak .etf-grid-analysis-icon,
+.etf-grid-analysis-item.market-weak .etf-grid-analysis-value {
+  color: var(--gain);
+}
+
+.etf-grid-analysis-item.market-neutral .etf-grid-analysis-icon,
+.etf-grid-analysis-item.market-neutral .etf-grid-analysis-value {
+  color: var(--primary);
+}
+
+/* 移动端适配 */
+@media (max-width: 640px) {
+  .etf-grid-analysis-item {
+    padding: 12px 14px;
+  }
+
+  .etf-grid-analysis-title {
+    font-size: 13px;
+  }
+
+  .etf-grid-analysis-value {
+    font-size: 15px;
+  }
+
+  .etf-grid-analysis-desc,
+  .etf-grid-analysis-details {
+    font-size: 12px;
+  }
+}
