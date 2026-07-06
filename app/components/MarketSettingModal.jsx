@@ -14,14 +14,13 @@ import ConfirmModal from './ConfirmModal';
 import { cn } from '@/lib/utils';
 
 function SortableIndexItem({ item, canRemove, onRemove }) {
-  const isMobile = useIsMobile();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.code });
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     cursor: isDragging ? 'grabbing' : 'grab',
-    flex: isMobile ? '0 0 calc((100% - 24px) / 3)' : '0 0 calc((100% - 48px) / 5)',
+    width: '100%',
     touchAction: 'none',
     ...(isDragging && {
       position: 'relative',
@@ -210,7 +209,12 @@ export default function MarketSettingModal({
             modifiers={[restrictToParentElement]}
           >
             <SortableContext items={selectedCodes} strategy={rectSortingStrategy}>
-              <div className="flex flex-wrap gap-3">
+              <div
+                className="grid gap-3"
+                style={{
+                  gridTemplateColumns: isMobile ? 'repeat(3, minmax(0, 1fr))' : 'repeat(5, minmax(0, 1fr))'
+                }}
+              >
                 {selectedList.map((item) => (
                   <SortableIndexItem
                     key={item.code}
@@ -374,7 +378,7 @@ export default function MarketSettingModal({
             exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
             onClick={(e) => e.stopPropagation()}
-            style={{ width: 690 }}
+            style={{ width: 840 }}
           >
             <div className="pc-table-setting-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

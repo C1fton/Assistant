@@ -624,6 +624,10 @@ const PcFundTable = memo(function PcFundTable({
   const [showPortalHeader, setShowPortalHeader] = useState(false);
   const [effectiveStickyTop, setEffectiveStickyTop] = useState(stickyTop);
   const [portalHorizontal, setPortalHorizontal] = useState({ left: 0, right: 0 });
+  const topScrollbarRef = useRef(null);
+  const portalTopScrollbarRef = useRef(null);
+  const [showTopScrollbar, setShowTopScrollbar] = useState(false);
+  const [tableScrollWidth, setTableScrollWidth] = useState(0);
   const enableRowAnimation = data.length <= 40;
 
   const autoScrollRafRef = useRef(null);
@@ -1136,6 +1140,7 @@ const PcFundTable = memo(function PcFundTable({
 
       if (!rect || (rect.width === 0 && rect.height === 0)) {
         setShowPortalHeader((prev) => (prev === false ? prev : false));
+        setShowTopScrollbar((prev) => (prev === false ? prev : false));
         return;
       }
 
@@ -1150,11 +1155,22 @@ const PcFundTable = memo(function PcFundTable({
       setPortalHorizontal((prev) => {
         const next = {
           left: rect.left,
-          right: rect.left
+          right: typeof window !== 'undefined' ? Math.max(0, window.innerWidth - rect.right) : 0
         };
         if (prev.left === next.left && prev.right === next.right) return prev;
         return next;
       });
+
+      const scrollWidth = scrollEl?.scrollWidth || 0;
+      const clientWidth = scrollEl?.clientWidth || 0;
+      const hasOverflow = scrollWidth > clientWidth + 1;
+      const isBottomOut = rect.bottom > window.innerHeight && rect.top < window.innerHeight;
+      const nextTopScrollbarVisible = hasOverflow && isBottomOut;
+
+      setShowTopScrollbar((prev) => (prev === nextTopScrollbarVisible ? prev : nextTopScrollbarVisible));
+      if (hasOverflow && scrollWidth > 0) {
+        setTableScrollWidth((prev) => (prev === scrollWidth ? prev : scrollWidth));
+      }
     };
 
     const throttledVerticalUpdate = throttle(updateVerticalState, 1000 / 60, { leading: true, trailing: true });
@@ -1167,6 +1183,8 @@ const PcFundTable = memo(function PcFundTable({
     if (tableContainerRef.current) {
       ro = new ResizeObserver(() => throttledVerticalUpdate());
       ro.observe(tableContainerRef.current);
+      const scrollEl = tableContainerRef.current.closest('.table-scroll-area');
+      if (scrollEl) ro.observe(scrollEl);
     }
 
     return () => {
@@ -1415,31 +1433,50 @@ const PcFundTable = memo(function PcFundTable({
 
   useEffect(() => {
     const tableEl = tableContainerRef.current;
-    const portalEl = portalHeaderRef.current;
     const scrollEl = tableEl?.closest('.table-scroll-area');
-    if (!scrollEl || !portalEl) return;
+    if (!scrollEl) return;
 
-    const syncScrollToPortal = () => {
-      portalEl.scrollLeft = scrollEl.scrollLeft;
+    const elements = [scrollEl, portalHeaderRef.current, topScrollbarRef.current, portalTopScrollbarRef.current].filter(
+      Boolean
+    );
+
+    if (elements.length <= 1) return;
+
+    const currentScrollLeft = scrollEl.scrollLeft;
+    elements.forEach((el) => {
+      if (el !== scrollEl && Math.abs(el.scrollLeft - currentScrollLeft) > 1) {
+        el.scrollLeft = currentScrollLeft;
+      }
+    });
+
+    let isSyncing = false;
+    const createScrollHandler = (sourceEl) => () => {
+      if (isSyncing) return;
+      isSyncing = true;
+      const val = sourceEl.scrollLeft;
+      elements.forEach((targetEl) => {
+        if (targetEl !== sourceEl && Math.abs(targetEl.scrollLeft - val) > 1) {
+          targetEl.scrollLeft = val;
+        }
+      });
+      isSyncing = false;
     };
 
-    const syncScrollToTable = () => {
-      scrollEl.scrollLeft = portalEl.scrollLeft;
-    };
+    const handlers = elements.map((el) => ({
+      el,
+      handler: createScrollHandler(el)
+    }));
 
-    syncScrollToPortal();
-
-    const handleTableScroll = () => syncScrollToPortal();
-    const handlePortalScroll = () => syncScrollToTable();
-
-    scrollEl.addEventListener('scroll', handleTableScroll, { passive: true });
-    portalEl.addEventListener('scroll', handlePortalScroll, { passive: true });
+    handlers.forEach(({ el, handler }) => {
+      el.addEventListener('scroll', handler, { passive: true });
+    });
 
     return () => {
-      scrollEl.removeEventListener('scroll', handleTableScroll);
-      portalEl.removeEventListener('scroll', handlePortalScroll);
+      handlers.forEach(({ el, handler }) => {
+        el.removeEventListener('scroll', handler);
+      });
     };
-  }, [showPortalHeader]);
+  }, [showPortalHeader, showTopScrollbar, tableScrollWidth]);
 
   const columns = useMemo(
     () => [
@@ -2751,6 +2788,11 @@ const PcFundTable = memo(function PcFundTable({
     <EditModeContext.Provider value={{ isEditMode, selectedCodes, toggleSelected }}>
       <>
         <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+          {showTopScrollbar && !showPortalHeader && (
+            <div className="pc-fund-table-top-scrollbar" ref={topScrollbarRef}>
+              <div className="pc-fund-table-top-scrollbar-inner" style={{ width: `${tableScrollWidth}px` }} />
+            </div>
+          )}
           <div className="table-pc-wrap">
             <div className="table-scroll-area">
               <div className="table-scroll-area-inner">
@@ -3030,75 +3072,88 @@ const PcFundTable = memo(function PcFundTable({
                   {showPortalHeader &&
                     ReactDOM.createPortal(
                       <div
-                        className="pc-fund-table pc-fund-table-portal-header"
-                        ref={portalHeaderRef}
                         style={{
-                          ...tableCssVariables,
                           position: 'fixed',
                           top: effectiveStickyTop,
                           left: portalHorizontal.left,
                           right: portalHorizontal.right,
-                          zIndex: 10,
-                          overflowX: 'auto',
-                          scrollbarWidth: 'none'
+                          zIndex: 10
                         }}
                       >
+                        {showTopScrollbar && (
+                          <div className="pc-fund-table-top-scrollbar" ref={portalTopScrollbarRef}>
+                            <div
+                              className="pc-fund-table-top-scrollbar-inner"
+                              style={{ width: `${tableScrollWidth}px` }}
+                            />
+                          </div>
+                        )}
                         <div
-                          className="table-header-row table-header-row-scroll"
-                          style={{ minWidth: totalHeaderWidth, width: 'fit-content' }}
+                          className="pc-fund-table pc-fund-table-portal-header"
+                          ref={portalHeaderRef}
+                          style={{
+                            ...tableCssVariables,
+                            overflowX: 'auto',
+                            scrollbarWidth: 'none'
+                          }}
                         >
-                          {headerGroup?.headers.map((header) => {
-                            const style = getCommonPinningStyles(header.column, true);
-                            const isNameColumn =
-                              header.column.id === 'fundName' || header.column.columnDef?.accessorKey === 'fundName';
-                            const isRightAligned = NON_FROZEN_COLUMN_IDS.includes(header.column.id);
-                            const align = isNameColumn ? '' : isRightAligned ? 'text-right' : 'text-center';
-                            const colId = header.column.id || header.column.columnDef?.accessorKey;
-                            const { sortKey, isSorted, isSortEnabled } = getSortHeaderMeta(colId);
-                            return (
-                              <div
-                                key={header.id}
-                                className={`table-header-cell ${align} ${isSortEnabled ? 'sortable' : ''}`}
-                                style={{
-                                  ...style,
-                                  cursor: isSortEnabled ? 'pointer' : 'default',
-                                  userSelect: isSortEnabled ? 'none' : 'auto'
-                                }}
-                                onClick={() => {
-                                  if (isSortEnabled && onSortChange) {
-                                    onSortChange(sortKey);
-                                  }
-                                }}
-                              >
+                          <div
+                            className="table-header-row table-header-row-scroll"
+                            style={{ minWidth: totalHeaderWidth, width: 'fit-content' }}
+                          >
+                            {headerGroup?.headers.map((header) => {
+                              const style = getCommonPinningStyles(header.column, true);
+                              const isNameColumn =
+                                header.column.id === 'fundName' || header.column.columnDef?.accessorKey === 'fundName';
+                              const isRightAligned = NON_FROZEN_COLUMN_IDS.includes(header.column.id);
+                              const align = isNameColumn ? '' : isRightAligned ? 'text-right' : 'text-center';
+                              const colId = header.column.id || header.column.columnDef?.accessorKey;
+                              const { sortKey, isSorted, isSortEnabled } = getSortHeaderMeta(colId);
+                              return (
                                 <div
+                                  key={header.id}
+                                  className={`table-header-cell ${align} ${isSortEnabled ? 'sortable' : ''}`}
                                   style={{
-                                    paddingRight: isRightAligned ? '20px' : '0',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 4
+                                    ...style,
+                                    cursor: isSortEnabled ? 'pointer' : 'default',
+                                    userSelect: isSortEnabled ? 'none' : 'auto'
+                                  }}
+                                  onClick={() => {
+                                    if (isSortEnabled && onSortChange) {
+                                      onSortChange(sortKey);
+                                    }
                                   }}
                                 >
-                                  {header.isPlaceholder
-                                    ? null
-                                    : flexRender(header.column.columnDef.header, header.getContext())}
-                                  {isSortEnabled && (
-                                    <span
-                                      style={{
-                                        display: 'inline-flex',
-                                        flexDirection: 'column',
-                                        lineHeight: 1,
-                                        fontSize: '8px',
-                                        opacity: isSorted ? 1 : 0.3
-                                      }}
-                                    >
-                                      <span style={{ opacity: isSorted && sortOrder === 'asc' ? 1 : 0.3 }}>▲</span>
-                                      <span style={{ opacity: isSorted && sortOrder === 'desc' ? 1 : 0.3 }}>▼</span>
-                                    </span>
-                                  )}
+                                  <div
+                                    style={{
+                                      paddingRight: isRightAligned ? '20px' : '0',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: 4
+                                    }}
+                                  >
+                                    {header.isPlaceholder
+                                      ? null
+                                      : flexRender(header.column.columnDef.header, header.getContext())}
+                                    {isSortEnabled && (
+                                      <span
+                                        style={{
+                                          display: 'inline-flex',
+                                          flexDirection: 'column',
+                                          lineHeight: 1,
+                                          fontSize: '8px',
+                                          opacity: isSorted ? 1 : 0.3
+                                        }}
+                                      >
+                                        <span style={{ opacity: isSorted && sortOrder === 'asc' ? 1 : 0.3 }}>▲</span>
+                                        <span style={{ opacity: isSorted && sortOrder === 'desc' ? 1 : 0.3 }}>▼</span>
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                            );
-                          })}
+                              );
+                            })}
+                          </div>
                         </div>
                       </div>,
                       document.body

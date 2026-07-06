@@ -10,6 +10,7 @@ import {
   useUserStore,
   useModalStore,
   getFundCodesSignature,
+  ensurePresetGroups,
   SORT_DISPLAY_MODES
 } from '../stores';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
@@ -173,10 +174,10 @@ export function useSyncManager({ showToast, refreshAllRef, setTempSeconds, setFu
                   new Set(group.codes.map(normalizeCode).filter((code) => uniqueFundCodes.includes(code)))
                 ).sort()
               : [];
-            return { id, name, codes };
+            const isPreset = Boolean(group?.isPreset || id === 'fav');
+            return { id, name, codes, ...(isPreset ? { isPreset: true } : {}) };
           })
           .filter(Boolean)
-          .sort((a, b) => a.id.localeCompare(b.id))
       : [];
 
     const validGroupIds = new Set(groups.map((g) => g.id));
@@ -484,12 +485,14 @@ export function useSyncManager({ showToast, refreshAllRef, setTempSeconds, setFu
         const cleanedCollapsedEarnings = isArray(all.collapsedEarnings)
           ? all.collapsedEarnings.filter((code) => fundCodes.has(code))
           : [];
-        const cleanedGroups = isArray(all.groups)
-          ? all.groups.map((g) => ({
-              ...g,
-              codes: isArray(g.codes) ? g.codes.filter((c) => fundCodes.has(c)) : []
-            }))
-          : [];
+        const cleanedGroups = ensurePresetGroups(
+          isArray(all.groups)
+            ? all.groups.map((g) => ({
+                ...g,
+                codes: isArray(g.codes) ? g.codes.filter((c) => fundCodes.has(c)) : []
+              }))
+            : []
+        );
 
         const validGroupIdSet = new Set(cleanedGroups.map((g) => g?.id).filter(Boolean));
 
@@ -988,16 +991,18 @@ export function useSyncManager({ showToast, refreshAllRef, setTempSeconds, setFu
         const nextFavorites = cleanCodeArray(cloudData.favorites, nextFundCodes);
         useStorageStore.getState().setFavorites(new Set(nextFavorites));
 
-        const nextGroups = isArray(cloudData.groups)
-          ? cloudData.groups
-              .map((g) => ({
-                ...g,
-                id: String(g?.id ?? '').trim() || uuidv4(),
-                name: String(g?.name ?? '').trim(),
-                codes: cleanCodeArray(g?.codes, nextFundCodes)
-              }))
-              .filter((g) => g.name.length > 0)
-          : [];
+        const nextGroups = ensurePresetGroups(
+          isArray(cloudData.groups)
+            ? cloudData.groups
+                .map((g) => ({
+                  ...g,
+                  id: String(g?.id ?? '').trim() || uuidv4(),
+                  name: String(g?.name ?? '').trim(),
+                  codes: cleanCodeArray(g?.codes, nextFundCodes)
+                }))
+                .filter((g) => g.name.length > 0 || g.id === 'fav' || g.isPreset)
+            : []
+        );
         useStorageStore.getState().setGroups(nextGroups);
 
         const nextCollapsed = isArray(cloudData.collapsedCodes) ? cloudData.collapsedCodes : [];

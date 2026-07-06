@@ -1411,6 +1411,47 @@ input[type='number'] {
   display: none; /* Chrome / Safari */
 }
 
+/* PC端表格顶部横向滚动条：当底部滚动条不可见且发生横向溢出时显示 */
+.pc-fund-table-top-scrollbar {
+  flex: 0 0 auto;
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  height: 8px;
+  min-height: 8px;
+  max-height: 8px;
+  line-height: 0;
+  font-size: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) var(--bg);
+}
+
+.pc-fund-table-top-scrollbar::-webkit-scrollbar {
+  height: 8px;
+}
+
+.pc-fund-table-top-scrollbar::-webkit-scrollbar-track {
+  background: var(--bg);
+  border-radius: 8px;
+}
+
+.pc-fund-table-top-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 8px;
+}
+
+.pc-fund-table-top-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
+.pc-fund-table-top-scrollbar::-webkit-scrollbar-thumb:active {
+  background: var(--primary);
+}
+
+.pc-fund-table-top-scrollbar-inner {
+  height: 1px;
+}
+
 /* 纵向滚动条通用样式（与项目整体规范一致，供根页面、弹窗、列表等使用） */
 html,
 .scrollbar-y-styled {
@@ -3040,7 +3081,7 @@ html::-webkit-scrollbar-thumb:active,
 
 /* 指数个性化设置侧弹框：加宽以一行展示 5 个指数卡片 */
 .pc-market-setting-drawer.pc-table-setting-drawer {
-  width: 560px;
+  width: 840px;
 }
 
 .pc-table-setting-header {

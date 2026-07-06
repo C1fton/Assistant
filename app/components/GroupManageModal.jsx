@@ -6,6 +6,8 @@ import { Dialog, DialogContent, DialogTitle } from '../../components/ui/dialog';
 import ConfirmModal from './ConfirmModal';
 import { DragIcon, PlusIcon, SettingsIcon, TrashIcon } from './Icons';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 const MAX_GROUP_NAME_LENGTH = 8;
 const truncateGroupName = (value) => [...(value || '')].slice(0, MAX_GROUP_NAME_LENGTH).join('');
@@ -13,13 +15,19 @@ const truncateGroupName = (value) => [...(value || '')].slice(0, MAX_GROUP_NAME_
 function GroupManageReorderItem({ item, onRename, onDeleteClick }) {
   const dragControls = useDragControls();
   const isComposingRef = useRef(false);
+  const isPreset = Boolean(item.isPreset || item.id === 'fav');
 
   return (
     <Reorder.Item
       key={item.id}
       value={item}
-      className="group-manage-item glass"
+      className={cn(
+        'group-manage-item glass transition-colors duration-200',
+        isPreset &&
+          'border-primary/40 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent dark:from-primary/15 dark:via-primary/5 dark:to-transparent shadow-[0_2px_12px_rgba(34,211,238,0.06)] dark:shadow-[0_0_15px_rgba(34,211,238,0.08)]'
+      )}
       layout
+      style={{ touchAction: 'pan-y' }}
       dragListener={false}
       dragControls={dragControls}
       initial={{ opacity: 0, scale: 0.98 }}
@@ -51,42 +59,58 @@ function GroupManageReorderItem({ item, onRename, onDeleteClick }) {
       >
         <DragIcon width="18" height="18" className="muted" />
       </div>
-      <input
-        className={`input group-rename-input ${!item.name.trim() ? 'error' : ''}`}
-        value={item.name}
-        onChange={(e) => onRename(item.id, e.target.value, e.nativeEvent.isComposing || isComposingRef.current)}
-        onCompositionStart={() => {
-          isComposingRef.current = true;
-        }}
-        onCompositionEnd={(e) => {
-          isComposingRef.current = false;
-          onRename(item.id, e.currentTarget.value);
-        }}
-        onBlur={(e) => {
-          if (!isComposingRef.current) onRename(item.id, e.currentTarget.value);
-        }}
-        placeholder="请输入分组名称..."
-        style={{
-          flex: 1,
-          height: '36px',
-          background: 'rgba(0,0,0,0.2)',
-          border: !item.name.trim() ? '1px solid var(--danger)' : 'none'
-        }}
-      />
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            className="icon-button danger"
-            onClick={() => onDeleteClick(item.id, item.name)}
-            style={{ width: '36px', height: '36px', flexShrink: 0 }}
+      {isPreset ? (
+        <div className="flex flex-1 items-center gap-2.5 px-[14px] h-[36px] select-none">
+          <span className="text-[14PX] font-medium text-foreground tracking-wide">{item.name || '自选'}</span>
+          <Badge
+            variant="outline"
+            className="font-medium text-[11PX] px-2 py-0.5 min-h-0 h-5 leading-none shrink-0 shadow-xs pointer-events-none border border-primary/30 bg-primary/15 text-primary backdrop-blur-md transition-colors"
           >
-            <TrashIcon width="16" height="16" />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>删除分组</p>
-        </TooltipContent>
-      </Tooltip>
+            预置
+          </Badge>
+        </div>
+      ) : (
+        <input
+          className={`input group-rename-input ${!item.name.trim() ? 'error' : ''}`}
+          value={item.name}
+          onChange={(e) => onRename(item.id, e.target.value, e.nativeEvent.isComposing || isComposingRef.current)}
+          onCompositionStart={() => {
+            isComposingRef.current = true;
+          }}
+          onCompositionEnd={(e) => {
+            isComposingRef.current = false;
+            onRename(item.id, e.currentTarget.value);
+          }}
+          onBlur={(e) => {
+            if (!isComposingRef.current) onRename(item.id, e.currentTarget.value);
+          }}
+          placeholder="请输入分组名称..."
+          style={{
+            flex: 1,
+            height: '36px',
+            background: 'rgba(0,0,0,0.2)',
+            border: !item.name.trim() ? '1px solid var(--danger)' : 'none'
+          }}
+        />
+      )}
+      {isPreset ? (
+        <div style={{ width: '36px', height: '36px', flexShrink: 0 }} />
+      ) : (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              className="icon-button danger"
+              onClick={() => onDeleteClick(item.id, item.name)}
+              style={{ width: '36px', height: '36px', flexShrink: 0 }}
+            >
+              <TrashIcon width="16" height="16" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>删除分组</p>
+          </TooltipContent>
+        </Tooltip>
+      )}
     </Reorder.Item>
   );
 }
@@ -106,6 +130,7 @@ export default function GroupManageModal({ groups, onClose, onSave }) {
 
   const handleDeleteClick = (id, name) => {
     const itemToDelete = items.find((it) => it.id === id);
+    if (itemToDelete?.isPreset || id === 'fav') return;
     const isNew = !groups.find((g) => g.id === id);
     const isEmpty = itemToDelete && (!itemToDelete.codes || itemToDelete.codes.length === 0);
 
@@ -133,13 +158,19 @@ export default function GroupManageModal({ groups, onClose, onSave }) {
   };
 
   const handleConfirm = () => {
-    const hasEmpty = items.some((it) => !it.name.trim());
+    const hasEmpty = items.some((it) => !(it.isPreset || it.id === 'fav') && !it.name.trim());
     if (hasEmpty) return;
-    onSave(items.map((item) => ({ ...item, name: truncateGroupName(item.name).trim() })));
+    onSave(
+      items.map((item) =>
+        item.isPreset || item.id === 'fav'
+          ? { ...item, name: '自选', isPreset: true }
+          : { ...item, name: truncateGroupName(item.name).trim() }
+      )
+    );
     onClose();
   };
 
-  const isAllValid = items.every((it) => it.name.trim() !== '');
+  const isAllValid = items.every((it) => it.isPreset || it.id === 'fav' || it.name.trim() !== '');
 
   return (
     <>
@@ -182,7 +213,14 @@ export default function GroupManageModal({ groups, onClose, onSave }) {
                 <p>暂无自定义分组</p>
               </div>
             ) : (
-              <Reorder.Group axis="y" values={items} onReorder={handleReorder} className="group-manage-list">
+              <Reorder.Group
+                axis="y"
+                values={items}
+                onReorder={handleReorder}
+                className="group-manage-list"
+                layoutScroll
+                style={{ touchAction: 'pan-y' }}
+              >
                 <AnimatePresence mode="popLayout">
                   {items.map((item) => (
                     <GroupManageReorderItem

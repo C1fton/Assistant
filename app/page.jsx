@@ -4765,35 +4765,26 @@ export default function HomePage() {
                             >
                               全部 ({funds.length})
                             </motion.button>
-                            {!showGroupDropdown && (
-                              <motion.button
-                                layout
-                                initial={{ opacity: 0, scale: 0.8 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.8 }}
-                                key="fav"
-                                className={`tab ${currentTab === 'fav' ? 'active' : ''}`}
-                                onClick={() => handleTabClick('fav')}
-                                transition={{ type: 'spring', stiffness: 500, damping: 30, mass: 1 }}
-                              >
-                                自选 ({favorites.size})
-                              </motion.button>
-                            )}
                             {!showGroupDropdown &&
-                              groups.map((g) => (
-                                <motion.button
-                                  layout
-                                  initial={{ opacity: 0, scale: 0.8 }}
-                                  animate={{ opacity: 1, scale: 1 }}
-                                  exit={{ opacity: 0, scale: 0.8 }}
-                                  key={g.id}
-                                  className={`tab ${currentTab === g.id ? 'active' : ''}`}
-                                  onClick={() => handleTabClick(g.id)}
-                                  transition={{ type: 'spring', stiffness: 500, damping: 30, mass: 1 }}
-                                >
-                                  {g.name} ({g.codes.length})
-                                </motion.button>
-                              ))}
+                              groups.map((g) => {
+                                const isFav = g.id === 'fav' || g.isPreset;
+                                const count = isFav ? favorites.size : g.codes?.length || 0;
+                                const label = isFav ? '自选' : g.name;
+                                return (
+                                  <motion.button
+                                    layout
+                                    initial={{ opacity: 0, scale: 0.8 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.8 }}
+                                    key={g.id}
+                                    className={`tab ${currentTab === g.id ? 'active' : ''}`}
+                                    onClick={() => handleTabClick(g.id)}
+                                    transition={{ type: 'spring', stiffness: 500, damping: 30, mass: 1 }}
+                                  >
+                                    {label} ({count})
+                                  </motion.button>
+                                );
+                              })}
                             {showGroupDropdown && (
                               <div
                                 key="group-dropdown"
@@ -4830,12 +4821,16 @@ export default function HomePage() {
                                     }}
                                   >
                                     <SelectGroup>
-                                      <SelectItem value="fav">自选 ({favorites.size})</SelectItem>
-                                      {groups.map((g) => (
-                                        <SelectItem key={g.id} value={g.id}>
-                                          {g.name} ({g.codes.length})
-                                        </SelectItem>
-                                      ))}
+                                      {groups.map((g) => {
+                                        const isFav = g.id === 'fav' || g.isPreset;
+                                        const count = isFav ? favorites.size : g.codes?.length || 0;
+                                        const label = isFav ? '自选' : g.name;
+                                        return (
+                                          <SelectItem key={g.id} value={g.id}>
+                                            {label} ({count})
+                                          </SelectItem>
+                                        );
+                                      })}
                                     </SelectGroup>
                                   </SelectContent>
                                 </Select>

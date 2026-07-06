@@ -239,14 +239,16 @@ export default function ScanImportConfirmModal({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">全部</SelectItem>
-                  <SelectItem value="fav">自选</SelectItem>
                   {groups
-                    .filter((g) => g.id !== 'all' && g.id !== 'fav')
-                    .map((g) => (
-                      <SelectItem key={g.id} value={g.id}>
-                        {g.name}
-                      </SelectItem>
-                    ))}
+                    .filter((g) => g.id !== 'all')
+                    .map((g) => {
+                      const isFav = g.id === 'fav' || g.isPreset;
+                      return (
+                        <SelectItem key={g.id} value={g.id}>
+                          {isFav ? '自选' : g.name}
+                        </SelectItem>
+                      );
+                    })}
                 </SelectContent>
               </Select>
             </div>

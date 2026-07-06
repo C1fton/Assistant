@@ -46,6 +46,34 @@ export const getTagsStoreSignature = (value) => {
 };
 
 /**
+ * 辅助函数：确保 groups 数组中始终包含预置的分组节点（如“自选”），且所有节点的数据结构合法
+ */
+export const ensurePresetGroups = (groupsInput) => {
+  const list = isArray(groupsInput) ? [...groupsInput] : [];
+  const favIndex = list.findIndex((g) => g && (g.id === 'fav' || g.isPreset));
+  if (favIndex === -1) {
+    list.unshift({
+      id: 'fav',
+      name: '自选',
+      isPreset: true,
+      codes: []
+    });
+  } else {
+    list[favIndex] = {
+      ...list[favIndex],
+      id: 'fav',
+      name: '自选',
+      isPreset: true,
+      codes: isArray(list[favIndex].codes) ? list[favIndex].codes : []
+    };
+  }
+  return list.map((g) => ({
+    ...g,
+    codes: isArray(g?.codes) ? g.codes : []
+  }));
+};
+
+/**
  * 仅以下 key 参与云端同步
  */
 const SYNC_KEYS = new Set([
@@ -144,7 +172,12 @@ export const useStorageStore = create((set, get) => ({
 
   initGroups: () => {
     if (typeof window !== 'undefined') {
-      set({ groups: get().getItem('groups', []) });
+      const raw = get().getItem('groups', []);
+      const ensured = ensurePresetGroups(raw);
+      set({ groups: ensured });
+      if (JSON.stringify(raw) !== JSON.stringify(ensured)) {
+        get().setItem('groups', JSON.stringify(ensured));
+      }
     }
   },
 
@@ -311,7 +344,8 @@ export const useStorageStore = create((set, get) => ({
   },
 
   setGroups: (nextGroups) => {
-    const next = isFunction(nextGroups) ? nextGroups(get().groups) : nextGroups;
+    const raw = isFunction(nextGroups) ? nextGroups(get().groups) : nextGroups;
+    const next = ensurePresetGroups(raw);
     set({ groups: next });
     get().setItem('groups', JSON.stringify(next));
   },
@@ -493,7 +527,7 @@ export const useStorageStore = create((set, get) => ({
     try {
       const parsed = JSON.parse(normalizedValue);
       if (key === 'funds') set({ funds: parsed });
-      else if (key === 'groups') set({ groups: parsed });
+      else if (key === 'groups') set({ groups: ensurePresetGroups(parsed) });
       else if (key === 'favorites') set({ favorites: new Set(parsed) });
       else if (key === 'collapsedCodes') set({ collapsedCodes: new Set(parsed) });
       else if (key === 'collapsedTrends') set({ collapsedTrends: new Set(parsed) });
