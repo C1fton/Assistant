@@ -3,6 +3,7 @@
  * 支持 OpenAI 兼容的大模型服务（OpenAI、DeepSeek、Moonshot、Qwen 等）。
  */
 import { storageStore } from '@/app/stores/storageStore';
+import { isSupabaseConfigured, supabase } from '@/app/lib/supabase';
 
 const MODEL_CONFIG = {
   'gpt-4o': {
@@ -155,6 +156,9 @@ const toOpenAiCompletionPayload = (messages, model, config, options, variant) =>
 const parseOpenAiResult = (data) =>
   data?.choices?.[0]?.message?.content?.trim() || data?.choices?.[0]?.text?.trim() || data?.output_text?.trim() || '';
 
+const isNetworkErrorMessage = (message) =>
+  /Failed to fetch|Load failed|NetworkError|网络请求失败|fetch failed/i.test(message);
+
 const readErrorMessage = async (response) => {
   let message = 'API 调用失败: ' + response.status;
   try {
@@ -173,17 +177,70 @@ const readErrorMessage = async (response) => {
 };
 
 const formatOpenAiErrors = (errors) => {
-  if (
-    errors.length &&
-    errors.every((item) => /Failed to fetch|Load failed|NetworkError|网络请求失败/i.test(item.message))
-  ) {
-    return '网络或跨域请求失败。如果 API 地址、模型和密钥都正确，说明该服务可能不允许浏览器/GitHub Pages 直连，需要改用支持 CORS 的网关或后端代理。';
+  if (errors.length && errors.every((item) => isNetworkErrorMessage(item.message))) {
+    return isSupabaseConfigured
+      ? '网络或跨域请求失败，且 Supabase LLM 代理也未能完成请求。请确认 llm-proxy Edge Function 已部署。'
+      : '网络或跨域请求失败。如果 API 地址、模型和密钥都正确，说明该服务可能不允许浏览器/GitHub Pages 直连，需要配置 Supabase 并部署 llm-proxy Edge Function。';
   }
   const compact = errors
     .map((item) => `${item.endpoint.replace(/^https?:\/\//, '')} [${item.variant}]：${item.message}`)
     .slice(0, 4)
     .join('；');
   return compact || '请检查 API 配置';
+};
+
+const invokeLLMProxy = async ({ provider, endpoint, apiKey, payload, anthropicVersion }) => {
+  if (!isSupabaseConfigured) {
+    throw new Error('当前未配置 Supabase，无法使用 LLM 代理绕过浏览器跨域限制。');
+  }
+
+  const { data, error } = await supabase.functions.invoke('llm-proxy', {
+    body: {
+      provider,
+      endpoint,
+      apiKey,
+      payload,
+      anthropicVersion
+    }
+  });
+
+  if (error) {
+    throw new Error(error.message || 'LLM 代理请求失败');
+  }
+  if (!data?.success) {
+    throw new Error(data?.error || 'LLM 代理请求失败');
+  }
+  return data.data;
+};
+
+const callOpenAiCompatibleProxy = async ({ messages, model, config, options, apiKey, baseUrl }) => {
+  const endpoints = getEndpointCandidates(baseUrl, 'openai');
+  const errors = [];
+
+  for (const endpoint of endpoints) {
+    const isCompletionEndpoint = /\/completions$/i.test(endpoint) && !/\/chat\/completions$/i.test(endpoint);
+    const variants = isCompletionEndpoint
+      ? openAiPayloadVariants.filter((variant) => variant.tokenKey !== 'max_completion_tokens')
+      : openAiPayloadVariants;
+
+    for (const variant of variants) {
+      try {
+        const data = await invokeLLMProxy({
+          provider: 'openai',
+          endpoint,
+          apiKey,
+          payload: isCompletionEndpoint
+            ? toOpenAiCompletionPayload(messages, model, config, options, variant)
+            : toOpenAiChatPayload(messages, model, config, options, variant)
+        });
+        return parseOpenAiResult(data);
+      } catch (error) {
+        errors.push({ endpoint, variant: `proxy:${variant.name}`, message: error?.message || '代理请求失败' });
+      }
+    }
+  }
+
+  throw new Error(formatOpenAiErrors(errors));
 };
 
 const callOpenAiCompatible = async ({ messages, model, config, options, apiKey, baseUrl }) => {
@@ -230,6 +287,10 @@ const callOpenAiCompatible = async ({ messages, model, config, options, apiKey, 
     }
   }
 
+  if (errors.length && errors.every((item) => isNetworkErrorMessage(item.message))) {
+    return callOpenAiCompatibleProxy({ messages, model, config, options, apiKey, baseUrl });
+  }
+
   throw new Error(formatOpenAiErrors(errors));
 };
 
@@ -256,6 +317,13 @@ const toAnthropicPayload = (messages, model, config, options) => {
     ...(system ? { system } : {})
   };
 };
+
+const parseAnthropicResult = (data) =>
+  data?.content
+    ?.map((block) => (block?.type === 'text' ? block.text : ''))
+    .filter(Boolean)
+    .join('\n')
+    .trim() || '';
 
 /**
  * 调用 LLM API
@@ -285,29 +353,39 @@ export const callLLM = async (messages, options = {}) => {
   }
 
   const endpoint = getEndpointCandidates(baseUrl, provider)[0];
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': options.anthropicVersion || '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify(toAnthropicPayload(messages, model, config, options))
-  });
+  const payload = toAnthropicPayload(messages, model, config, options);
+  let response;
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': options.anthropicVersion || '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify(payload)
+    });
+  } catch (error) {
+    if (isNetworkErrorMessage(error?.message || '') && isSupabaseConfigured) {
+      const data = await invokeLLMProxy({
+        provider,
+        endpoint,
+        apiKey,
+        payload,
+        anthropicVersion: options.anthropicVersion || '2023-06-01'
+      });
+      return parseAnthropicResult(data);
+    }
+    throw error;
+  }
 
   if (!response.ok) {
     throw new Error(await readErrorMessage(response));
   }
 
   const data = await response.json();
-  return (
-    data?.content
-      ?.map((block) => (block?.type === 'text' ? block.text : ''))
-      .filter(Boolean)
-      .join('\n')
-      .trim() || ''
-  );
+  return parseAnthropicResult(data);
 };
 
 const joinPrompt = (lines) => lines.join('\n');

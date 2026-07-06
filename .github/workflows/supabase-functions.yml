@@ -50,3 +50,6 @@ jobs:
 
       - name: Deploy fund topic sync
         run: supabase functions deploy sync-fund-topic --project-ref "$SUPABASE_PROJECT_ID"
+
+      - name: Deploy LLM proxy
+        run: supabase functions deploy llm-proxy --project-ref "$SUPABASE_PROJECT_ID"

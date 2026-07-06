@@ -158,7 +158,10 @@ export const LLMSettingModal = ({ open, onOpenChange }) => {
                 ? 'Anthropic 模式使用 /v1/messages、x-api-key 与 anthropic-version 请求 Claude。'
                 : 'OpenAI 兼容模式优先使用 /chat/completions，并会对火山 Ark Coding 等服务自动尝试兼容参数。API 地址填服务商提供的 base URL，通常不需要手动加 /chat/completions。'}
             </p>
-            <p>密钥仅保存在当前浏览器，不会同步到 Supabase，也不会上传到 GitHub Pages。</p>
+            <p>
+              密钥仅保存在当前浏览器，不会同步到 Supabase，也不会上传到 GitHub
+              Pages。若服务商不允许浏览器跨域直连，系统会自动通过 Supabase llm-proxy 转发请求。
+            </p>
           </div>
         </div>
         <DialogFooter className="llm-settings-footer">
