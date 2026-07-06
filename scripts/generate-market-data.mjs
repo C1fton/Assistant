@@ -16,7 +16,10 @@ const loadLocalEnv = async () => {
       const index = trimmed.indexOf('=');
       if (index <= 0) continue;
       const key = trimmed.slice(0, index).trim();
-      const value = trimmed.slice(index + 1).trim().replace(/^['"]|['"]$/g, '');
+      const value = trimmed
+        .slice(index + 1)
+        .trim()
+        .replace(/^['"]|['"]$/g, '');
       if (key && process.env[key] == null) process.env[key] = value;
     }
   } catch {
@@ -97,7 +100,8 @@ const fetchSectorPage = async (typeCode, sectorType, page = 1) => {
   });
   const payload = await fetchJson(`https://push2delay.eastmoney.com/api/qt/clist/get?${params.toString()}`);
   const rows = payload?.data?.diff;
-  const total = payload?.data?.total != null && Number.isFinite(Number(payload.data.total)) ? Number(payload.data.total) : 0;
+  const total =
+    payload?.data?.total != null && Number.isFinite(Number(payload.data.total)) ? Number(payload.data.total) : 0;
   return { rows: normalizeSectorRows(rows, sectorType), total };
 };
 
@@ -137,7 +141,10 @@ const fetchFundTopicFromSupabase = async () => {
     if (!isArray(rows)) return [];
     return rows
       .map((item) => ({
-        id: item?.id != null ? String(item.id) : `${item?.sector_type || 'sector'}-${item?.sector_id || item?.sector_name}`,
+        id:
+          item?.id != null
+            ? String(item.id)
+            : `${item?.sector_type || 'sector'}-${item?.sector_id || item?.sector_name}`,
         sector_id: item?.sector_id != null ? String(item.sector_id) : '',
         sector_name: item?.sector_name != null ? String(item.sector_name) : '',
         sector_type: item?.sector_type != null ? String(item.sector_type) : '',
@@ -170,8 +177,8 @@ const rankingResults = [];
 for (const request of rankingRequests) {
   const result = await Promise.resolve()
     .then(async () => {
-    const data = await fetchRanking(request);
-    rankings[rankingKey(request)] = data;
+      const data = await fetchRanking(request);
+      rankings[rankingKey(request)] = data;
     })
     .then(
       () => ({ status: 'fulfilled' }),
@@ -184,7 +191,10 @@ for (const request of rankingRequests) {
 const supabaseSectors = await fetchFundTopicFromSupabase();
 const [industryResult, conceptResult] =
   supabaseSectors.length > 0
-    ? [{ status: 'fulfilled', value: [] }, { status: 'fulfilled', value: [] }]
+    ? [
+        { status: 'fulfilled', value: [] },
+        { status: 'fulfilled', value: [] }
+      ]
     : await Promise.allSettled([fetchSectorList(2, 'industry'), fetchSectorList(3, 'concept')]);
 
 const sectors =

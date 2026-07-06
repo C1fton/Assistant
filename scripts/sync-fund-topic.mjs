@@ -14,7 +14,10 @@ const loadLocalEnv = async () => {
       const index = trimmed.indexOf('=');
       if (index <= 0) continue;
       const key = trimmed.slice(0, index).trim();
-      const value = trimmed.slice(index + 1).trim().replace(/^['"]|['"]$/g, '');
+      const value = trimmed
+        .slice(index + 1)
+        .trim()
+        .replace(/^['"]|['"]$/g, '');
       if (key && process.env[key] == null) process.env[key] = value;
     }
   } catch {
@@ -90,7 +93,8 @@ const fetchSectorPage = async (typeCode, sectorType, page = 1) => {
   });
   const payload = await fetchJson(`https://push2delay.eastmoney.com/api/qt/clist/get?${params.toString()}`);
   const rows = payload?.data?.diff;
-  const total = payload?.data?.total != null && Number.isFinite(Number(payload.data.total)) ? Number(payload.data.total) : 0;
+  const total =
+    payload?.data?.total != null && Number.isFinite(Number(payload.data.total)) ? Number(payload.data.total) : 0;
   return { rows: normalizeSectorRows(rows, sectorType), total };
 };
 
