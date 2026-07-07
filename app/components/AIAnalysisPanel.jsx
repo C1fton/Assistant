@@ -161,6 +161,7 @@ const AI_RESULT_DEFAULTS = {
 };
 
 const AI_HISTORY_MAX = 20;
+const AI_RESULTS_VERSION = 'market-opportunity-v2';
 
 const AI_TYPE_LABELS = {
   analysis: '持仓分析',
@@ -174,7 +175,12 @@ const AI_TYPE_LABELS = {
 const getSavedAIResults = () => {
   if (typeof window === 'undefined') return null;
   try {
-    return storageStore.getItem('ai_analysis_results', null);
+    const saved = storageStore.getItem('ai_analysis_results', null);
+    const version = storageStore.getItem('ai_analysis_results_version', '');
+    if (version !== AI_RESULTS_VERSION && isObject(saved)) {
+      return { ...saved, recommendation: '' };
+    }
+    return saved;
   } catch {
     return null;
   }
@@ -205,8 +211,16 @@ const normalizeCandidateFund = (item, source, rank, toNumber) => {
     readFirstField(item, ['code', 'fundCode', 'fundcode', 'FCODE', 'fcode', '基金代码', 'bzdm'])
   ).trim();
   const name = String(
-    readFirstField(item, ['name', 'fundName', 'SHORTNAME', 'shortname', 'FNAME', '基金简称', '简称'])
+    readFirstField(item, ['name', 'fundName', 'SHORTNAME', 'shortname', 'FNAME', '基金简称', '简称', 'jjjc'])
   ).trim();
+  const parseMarketNumber = (value) =>
+    toNumber(
+      String(value ?? '')
+        .replace('%', '')
+        .replace(/,/g, '')
+        .trim(),
+      null
+    );
 
   if (!/^\d{6}$/.test(code) || !name) return null;
 
@@ -215,18 +229,22 @@ const normalizeCandidateFund = (item, source, rank, toNumber) => {
     name,
     source,
     rank,
-    type: item?.type || '',
+    type: item?.type || item?.FType || item?.fundtype || '',
     theme: item?.theme || item?.tags || '',
     isHeld: !!item?.isHeld,
-    holdingAmount: toNumber(item?.holdingAmount ?? item?.amountHint, null),
-    currentNav: toNumber(readFirstField(item, ['currentNav', 'GSZ', 'gsz', 'NAV', 'DWJZ', 'dwjz']), null),
-    estimatedChangePercent: toNumber(
-      readFirstField(item, ['estimatedChangePercent', 'GSZZL', 'gszzl', 'changePercent', 'zdf', '涨跌幅']),
-      null
+    isTracked: !!item?.isTracked,
+    trackingStatus: item?.trackingStatus || '',
+    holdingAmount: parseMarketNumber(item?.holdingAmount ?? item?.amountHint),
+    currentNav: parseMarketNumber(readFirstField(item, ['currentNav', 'GSZ', 'gsz', 'NAV', 'DWJZ', 'dwjz'])),
+    estimatedChangePercent: parseMarketNumber(
+      readFirstField(item, ['estimatedChangePercent', 'GSZZL', 'gszzl', 'changePercent', 'zdf', '涨跌幅'])
     ),
-    previousDayChangePercent: toNumber(readFirstField(item, ['previousDayChangePercent', 'ZZL', 'zzl']), null),
+    actualChangePercent: parseMarketNumber(readFirstField(item, ['actualChangePercent', 'jzzzl'])),
+    previousDayChangePercent: parseMarketNumber(readFirstField(item, ['previousDayChangePercent', 'ZZL', 'zzl'])),
     heatSignal: readFirstField(item, ['heat', 'HOT', 'SCORE', 'followCount', 'fundHeat']) || '',
-    dataDate: readFirstField(item, ['netValueDate', 'PDATE', 'jzrq', 'date']) || ''
+    dataDate: readFirstField(item, ['netValueDate', 'PDATE', 'jzrq', 'date', 'gxrq', 'gzrq']) || '',
+    opportunitySource: item?.opportunitySource || source,
+    opportunityReason: item?.opportunityReason || ''
   };
 };
 
@@ -271,8 +289,38 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
   });
 
   const { data: valuationRanking } = useQuery({
-    queryKey: ['ai-valuation-ranking'],
-    queryFn: () => fetchFundValuationRanking(3, 'desc', 1, 20),
+    queryKey: ['ai-opportunity-rankings'],
+    queryFn: async () => {
+      const tabs = [
+        { sort: 3, order: 'desc', source: '估值涨幅榜', reason: '估值涨幅靠前，代表短线资金或主题热度正在升温' },
+        { sort: 4, order: 'desc', source: '市场热度榜', reason: '市场关注度靠前，适合寻找未覆盖的热门主题基金' },
+        { sort: 5, order: 'desc', source: '实际涨幅榜', reason: '最新实际涨幅靠前，用于验证估值信号是否兑现' },
+        { sort: 3, order: 'asc', source: '估值跌幅榜', reason: '估值回撤靠前，只作为低吸观察池，不默认追买' }
+      ];
+      const requests = tabs.flatMap((tab) =>
+        [1, 2, 3].map((page) => ({
+          ...tab,
+          page
+        }))
+      );
+      const settled = await Promise.allSettled(
+        requests.map((request) =>
+          fetchFundValuationRanking(request.sort, request.order, request.page, 20).then((res) =>
+            (isArray(res?.Data?.list) ? res.Data.list : []).map((item, index) => ({
+              ...item,
+              opportunitySource: request.source,
+              opportunityReason: request.reason,
+              sourceRank: (request.page - 1) * 20 + index + 1
+            }))
+          )
+        )
+      );
+      return {
+        Data: {
+          list: settled.flatMap((result) => (result.status === 'fulfilled' ? result.value : []))
+        }
+      };
+    },
     enabled: !!open,
     staleTime: 120000
   });
@@ -280,6 +328,7 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
   useEffect(() => {
     try {
       storageStore.setItem('ai_analysis_results', JSON.stringify(results));
+      storageStore.setItem('ai_analysis_results_version', AI_RESULTS_VERSION);
     } catch {
       // ignore local persistence errors
     }
@@ -319,6 +368,8 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
   const marketInsights = useMemo(() => {
     const sectorList = isArray(marketSectors) ? marketSectors : [];
     const rankingList = isArray(valuationRanking?.Data?.list) ? valuationRanking.Data.list : [];
+    const trackedCodeSet = new Set(funds.map((fund) => String(fund?.code || '').trim()).filter(Boolean));
+    const heldCodeSet = new Set(Object.keys(isObject(holdings) ? holdings : {}));
     const fundChanges = funds
       .map((fund) => ({
         code: fund?.code,
@@ -354,7 +405,9 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
         normalizeCandidateFund(
           {
             ...fund,
-            isHeld: !!holdings?.[fund?.code],
+            isHeld: heldCodeSet.has(fund?.code),
+            isTracked: trackedCodeSet.has(fund?.code),
+            trackingStatus: heldCodeSet.has(fund?.code) ? '已持有' : '已关注未持有',
             holdingAmount: holdings?.[fund?.code]?.amount || null,
             currentNav: getCurrentNav(fund),
             estimatedChangePercent: fund?.noValuation ? null : toNumber(fund?.gszzl),
@@ -369,10 +422,25 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
       )
       .filter(Boolean);
     const rankingCandidates = rankingList
-      .map((item, index) => normalizeCandidateFund(item, 'valuation_ranking_hot', index + 1, toNumber))
+      .map((item, index) => {
+        const code = String(
+          readFirstField(item, ['code', 'fundCode', 'fundcode', 'FCODE', 'fcode', '基金代码', 'bzdm'])
+        ).trim();
+        return normalizeCandidateFund(
+          {
+            ...item,
+            isHeld: heldCodeSet.has(code),
+            isTracked: trackedCodeSet.has(code),
+            trackingStatus: heldCodeSet.has(code) ? '已持有' : trackedCodeSet.has(code) ? '已关注未持有' : '未关注'
+          },
+          item?.opportunitySource || 'market_opportunity_ranking',
+          item?.sourceRank || index + 1,
+          toNumber
+        );
+      })
       .filter(Boolean);
     const candidateMap = new Map();
-    [...trackedCandidates, ...rankingCandidates].forEach((item) => {
+    rankingCandidates.forEach((item) => {
       const existed = candidateMap.get(item.code);
       candidateMap.set(
         item.code,
@@ -382,11 +450,26 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
               ...item,
               source: `${existed.source},${item.source}`,
               isHeld: existed.isHeld || item.isHeld,
-              holdingAmount: existed.holdingAmount ?? item.holdingAmount
+              isTracked: existed.isTracked || item.isTracked,
+              trackingStatus:
+                existed.isHeld || item.isHeld
+                  ? '已持有'
+                  : existed.isTracked || item.isTracked
+                    ? '已关注未持有'
+                    : '未关注',
+              holdingAmount: existed.holdingAmount ?? item.holdingAmount,
+              opportunityReason: [existed.opportunityReason, item.opportunityReason].filter(Boolean).join('；')
             }
           : item
       );
     });
+    const externalOpportunityPool = Array.from(candidateMap.values())
+      .filter((item) => !item.isTracked)
+      .slice(0, 50);
+    const trackedOpportunityPool = Array.from(candidateMap.values())
+      .filter((item) => item.isTracked)
+      .slice(0, 16);
+    const trackedComparisonPool = trackedCandidates.slice(0, 16);
 
     return {
       generatedAt: new Date().toLocaleString(),
@@ -412,7 +495,15 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
       weakSectors: [...sectorChanges].sort((a, b) => Number(a.change_pct || 0) - Number(b.change_pct || 0)).slice(0, 8),
       inflowSectors: [...sectorList].sort((a, b) => Number(b.net_inflow || 0) - Number(a.net_inflow || 0)).slice(0, 8),
       valuationLeaders: rankingCandidates.slice(0, 12),
-      recommendationCandidatePool: Array.from(candidateMap.values()).slice(0, 60)
+      externalOpportunityPool,
+      trackedOpportunityPool,
+      trackedComparisonPool,
+      recommendationCandidatePool: [
+        ...externalOpportunityPool,
+        ...trackedOpportunityPool,
+        ...trackedComparisonPool
+      ].slice(0, 80),
+      currentFocusCodes: Array.from(trackedCodeSet)
     };
   }, [funds, getChangePercent, getCurrentNav, holdings, marketSectors, toNumber, valuationRanking]);
 
@@ -592,7 +683,7 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
         generatedAt: new Date().toLocaleString(),
         dataLimitations: [
           '当前版本未接入实时新闻 API；消息面只能基于输入中的板块、热度、资金流和涨跌信号推断',
-          '推荐基金代码/名称只能来自 recommendationCandidatePool 或当前持仓/关注列表，不允许编造'
+          '基金推荐应优先来自 externalOpportunityPool；已关注/持仓基金只能作为对照、换仓来源或少量补充，不允许编造代码'
         ],
         cashBudget: buildCashBudget(),
         marketTemperature: marketInsights,
@@ -604,7 +695,11 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
         topRisers,
         topFallers,
         highVolatility,
+        externalOpportunityPool: marketInsights.externalOpportunityPool,
+        trackedOpportunityPool: marketInsights.trackedOpportunityPool,
+        trackedComparisonPool: marketInsights.trackedComparisonPool,
         recommendationCandidatePool: marketInsights.recommendationCandidatePool,
+        currentFocusCodes: marketInsights.currentFocusCodes,
         allFunds: fundSnapshot.slice(0, 80)
       },
       null,

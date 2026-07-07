@@ -421,8 +421,10 @@ export const PROMPT_TEMPLATES = {
   ]),
 
   fundRecommendation: joinPrompt([
-    '你是专业的基金机会扫描与建仓规划助手。本页不是复述当前持仓分析，而是基于市场热度、板块强弱、资金流向、估值榜候选基金和用户可用现金，推荐值得观察或建仓的基金。',
-    '必须从 marketData.recommendationCandidatePool、当前持仓/关注基金或估值榜里选择基金代码与名称；不得编造输入中没有的基金代码。候选池不足时，请明确说明“候选数据不足”，并只给板块/基金类型观察方向。',
+    '你是专业的基金机会扫描与建仓规划助手。本页的核心任务是发现用户尚未关注到的市场潜力基金，不是复述当前持仓分析。',
+    '必须优先从 marketData.externalOpportunityPool 选择“未关注”基金代码与名称；已关注/持仓基金只能作为对照、替换来源或极少量补充。',
+    '除非 externalOpportunityPool 少于 3 只，否则推荐主表中至少 5 只必须是“未关注”基金，且已关注/持仓基金最多 1 只。',
+    '不得编造输入中没有的基金代码。候选池不足时，请明确说明“未关注候选数据不足”，并只给板块/基金类型观察方向。',
     '如果 marketData.dataLimitations 提示未接入实时新闻 API，不要编造新闻标题或利好利空，只能把板块、资金流、涨跌、热度信号作为消息面代理变量。',
     '',
     '组合数据快照：',
@@ -438,10 +440,10 @@ export const PROMPT_TEMPLATES = {
     '',
     '请按以下固定结构输出：',
     '1. 今日市场机会结论：用 3 条以内说明今天更偏进攻、防守还是观望，以及最值得关注的板块方向。',
-    '2. 候选信号依据：引用 strongSectors、weakSectors、inflowSectors、valuationLeaders、topRisers/topFallers/highVolatility 或 recommendationCandidatePool 中实际存在的字段。',
-    '3. 推荐基金清单：用 Markdown 表格逐个给出“基金代码 / 基金名称 / 是否已有持仓 / 关注板块或主题 / 推荐动作 / 建仓或加仓金额 / 分批节奏 / 触发条件 / 风险点”。推荐动作只能选：新建观察仓、已有持仓加仓、暂不建仓、减仓腾挪后再买、只观察。',
-    '4. 资金分配方案：必须以 availableCash 为总预算，列出每只基金建议使用金额和合计占用；合计不得超过 availableCash。若 availableCash 为 0，则所有买入金额写 0，并说明需要先补充可用资金或仅观察。',
-    '5. 已有持仓联动：说明如果推荐的是新基金，是否需要从哪些高集中/弱势/重复主题持仓里减仓腾挪；如果不需要，说明原因。',
+    '2. 候选信号依据：优先引用 externalOpportunityPool 中的 opportunitySource、opportunityReason、estimatedChangePercent、actualChangePercent、type，再结合 strongSectors、weakSectors、inflowSectors、valuationLeaders、topRisers/topFallers/highVolatility。',
+    '3. 未关注基金推荐清单：用 Markdown 表格逐个给出“基金代码 / 基金名称 / 是否已关注 / 机会来源 / 基金类型或主题 / 推荐动作 / 建仓金额 / 分批节奏 / 触发条件 / 风险点”。推荐动作只能选：新建观察仓、暂不建仓、减仓腾挪后再买、只观察。',
+    '4. 已有基金对照：单独说明当前已关注/持仓基金里是否有可替代、重复主题或需要腾挪的对象；不要把这一节写成推荐主表。',
+    '5. 资金分配方案：必须以 availableCash 为总预算，列出每只未关注基金建议使用金额和合计占用；合计不得超过 availableCash。若 availableCash 为 0，则所有买入金额写 0，并说明需要先补充可用资金或仅观察。',
     '6. 风险提示：说明数据延迟、候选池有限、非投资建议。'
   ]),
 
