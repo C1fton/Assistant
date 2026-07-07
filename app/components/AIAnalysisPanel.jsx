@@ -163,6 +163,7 @@ const AI_RESULT_DEFAULTS = {
 const AI_HISTORY_MAX = 20;
 const AI_FEEDBACK_MAX = 50;
 const AI_RESULTS_VERSION = 'market-opportunity-v2';
+const AI_PROMPT_MAX_CHARS = 18000;
 
 const AI_TYPE_LABELS = {
   analysis: '持仓分析',
@@ -234,6 +235,53 @@ const extractFundCodesFromText = (text) => {
   const matches = String(text || '').match(/\b\d{6}\b/g) || [];
   return Array.from(new Set(matches)).slice(0, 30);
 };
+
+const compactText = (text, maxLength = 600) => {
+  const value = String(text || '').trim();
+  return value.length > maxLength ? `${value.slice(0, maxLength)}...` : value;
+};
+
+const compactPrompt = (prompt) => {
+  const text = String(prompt || '');
+  if (text.length <= AI_PROMPT_MAX_CHARS) return text;
+  const headLength = Math.floor(AI_PROMPT_MAX_CHARS * 0.72);
+  const tailLength = AI_PROMPT_MAX_CHARS - headLength - 120;
+  return [
+    text.slice(0, headLength),
+    '',
+    '[中间部分因模型请求长度限制已自动裁剪；请只基于保留的数据做保守判断，不要补造缺失字段。]',
+    '',
+    text.slice(-tailLength)
+  ].join('\n');
+};
+
+const compactSector = (sector) => ({
+  name: sector?.sector_name || sector?.name || '',
+  type: sector?.sector_type || '',
+  changePercent: sector?.change_pct ?? null,
+  netInflow: sector?.net_inflow ?? null
+});
+
+const compactFund = (fund) => ({
+  code: fund?.code || '',
+  name: fund?.name || '',
+  type: fund?.type || '',
+  theme: fund?.theme || '',
+  trackingStatus: fund?.trackingStatus || '',
+  isHeld: !!fund?.isHeld,
+  isTracked: !!fund?.isTracked,
+  holdingAmount: fund?.holdingAmount ?? null,
+  ratio: fund?.ratio || '',
+  ratioValue: fund?.ratioValue ?? null,
+  profitRate: fund?.profitRate ?? null,
+  estimatedChangePercent: fund?.estimatedChangePercent ?? null,
+  actualChangePercent: fund?.actualChangePercent ?? null,
+  previousDayChangePercent: fund?.previousDayChangePercent ?? null,
+  changePercent: fund?.changePercent ?? null,
+  opportunitySource: fund?.opportunitySource || fund?.source || '',
+  opportunityReason: compactText(fund?.opportunityReason || '', 120),
+  dataDate: fund?.dataDate || fund?.netValueDate || ''
+});
 
 const getSavedAIHistory = () => {
   if (typeof window === 'undefined') return [];
@@ -602,8 +650,21 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
 
   const formatAvailableCashData = (portfolioAmount = 0) => JSON.stringify(buildCashBudget(portfolioAmount), null, 2);
 
+  const compactMarketTemperature = (mode = 'default') => ({
+    generatedAt: marketInsights.generatedAt,
+    temperatureScore: marketInsights.temperatureScore,
+    temperatureLabel: marketInsights.temperatureLabel,
+    breadth: marketInsights.breadth,
+    strongSectors: (marketInsights.strongSectors || []).slice(0, mode === 'recommendation' ? 8 : 5).map(compactSector),
+    weakSectors: (marketInsights.weakSectors || []).slice(0, mode === 'recommendation' ? 8 : 5).map(compactSector),
+    inflowSectors: (marketInsights.inflowSectors || []).slice(0, mode === 'recommendation' ? 8 : 5).map(compactSector),
+    valuationLeaders: (marketInsights.valuationLeaders || [])
+      .slice(0, mode === 'recommendation' ? 10 : 5)
+      .map(compactFund)
+  });
+
   // 格式化持仓数据，传给LLM
-  const formatHoldingsData = () => {
+  const formatHoldingsData = (mode = 'default') => {
     const fundMap = new Map(funds.map((f) => [f.code, f]));
     const holdingList = Object.entries(holdings).map(([code, holding]) => {
       const fund = fundMap.get(code);
@@ -712,6 +773,15 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
         },
         topConcentration: concentration.slice(0, 8),
         holdings: holdingsWithRatio
+          .slice(0, mode === 'risk' || mode === 'rebalance' || mode === 'analysis' ? 40 : 24)
+          .map((item) => ({
+            ...compactFund(item),
+            holdingShares: item.holdingShares,
+            currentNav: item.currentNav,
+            costNav: item.costNav,
+            profitAmount: item.profitAmount,
+            decisionHints: item.decisionHints
+          }))
       },
       null,
       2
@@ -719,7 +789,7 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
   };
 
   // 基于当前页面已有基金数据生成市场/组合快照
-  const getMarketData = () => {
+  const getMarketData = (mode = 'default') => {
     const fundSnapshot = funds.map((fund) => {
       const changePercent = getChangePercent(fund);
       return {
@@ -737,12 +807,15 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
     });
 
     const changedFunds = fundSnapshot.filter((item) => item.changePercent != null);
-    const topRisers = [...changedFunds].sort((a, b) => b.changePercent - a.changePercent).slice(0, 8);
-    const topFallers = [...changedFunds].sort((a, b) => a.changePercent - b.changePercent).slice(0, 8);
+    const listSize = mode === 'recommendation' ? 10 : mode === 'market' ? 8 : 5;
+    const topRisers = [...changedFunds].sort((a, b) => b.changePercent - a.changePercent).slice(0, listSize);
+    const topFallers = [...changedFunds].sort((a, b) => a.changePercent - b.changePercent).slice(0, listSize);
     const highVolatility = [...changedFunds]
       .filter((item) => Math.abs(item.changePercent) >= 2)
       .sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent))
-      .slice(0, 10);
+      .slice(0, listSize);
+    const includeOpportunityPool = mode === 'recommendation';
+    const includeSmallOpportunitySignal = mode === 'market';
 
     return JSON.stringify(
       {
@@ -753,40 +826,53 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
           '基金推荐应优先来自 externalOpportunityPool；已关注/持仓基金只能作为对照、换仓来源或少量补充，不允许编造代码'
         ],
         cashBudget: buildCashBudget(),
-        marketTemperature: marketInsights,
+        marketTemperature: compactMarketTemperature(mode),
         fundCount: funds.length,
         valuedFundCount: changedFunds.length,
         risingCount: changedFunds.filter((item) => item.changePercent > 0).length,
         fallingCount: changedFunds.filter((item) => item.changePercent < 0).length,
         noValuationCount: fundSnapshot.filter((item) => item.noValuation).length,
-        topRisers,
-        topFallers,
-        highVolatility,
-        externalOpportunityPool: marketInsights.externalOpportunityPool,
-        trackedOpportunityPool: marketInsights.trackedOpportunityPool,
-        trackedComparisonPool: marketInsights.trackedComparisonPool,
-        recommendationCandidatePool: marketInsights.recommendationCandidatePool,
+        topRisers: topRisers.map(compactFund),
+        topFallers: topFallers.map(compactFund),
+        highVolatility: highVolatility.map(compactFund),
+        ...(includeOpportunityPool
+          ? {
+              externalOpportunityPool: (marketInsights.externalOpportunityPool || []).slice(0, 24).map(compactFund),
+              trackedOpportunityPool: (marketInsights.trackedOpportunityPool || []).slice(0, 8).map(compactFund),
+              trackedComparisonPool: (marketInsights.trackedComparisonPool || []).slice(0, 8).map(compactFund),
+              recommendationCandidatePool: (marketInsights.recommendationCandidatePool || [])
+                .slice(0, 34)
+                .map(compactFund)
+            }
+          : {}),
+        ...(includeSmallOpportunitySignal
+          ? {
+              externalOpportunitySignals: (marketInsights.externalOpportunityPool || []).slice(0, 8).map(compactFund)
+            }
+          : {}),
         currentFocusCodes: marketInsights.currentFocusCodes,
-        allFunds: fundSnapshot.slice(0, 80)
+        allFunds: mode === 'market' ? fundSnapshot.slice(0, 24).map(compactFund) : undefined
       },
       null,
       2
     );
   };
 
-  const formatHistoryData = () => {
+  const formatHistoryData = (mode = 'default') => {
+    const limit = mode === 'review' ? 8 : mode === 'memory' ? 10 : 4;
+    const excerptLength = mode === 'review' || mode === 'memory' ? 900 : 420;
     return JSON.stringify(
       {
         source: '用户本地保存的 AI 分析记录，仅用于复盘此前建议，不代表建议已执行。',
         generatedAt: new Date().toLocaleString(),
         historyCount: history.length,
-        recentHistory: history.slice(0, 10).map((item) => ({
+        recentHistory: history.slice(0, limit).map((item) => ({
           type: item.type,
           typeLabel: item.typeLabel,
           generatedAt: item.generatedAt,
           snapshot: item.snapshot,
           recommendedCodes: item.recommendedCodes || [],
-          contentExcerpt: String(item.content || '').slice(0, 2200)
+          contentExcerpt: compactText(item.content, excerptLength)
         }))
       },
       null,
@@ -794,8 +880,10 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
     );
   };
 
-  const formatMemoryData = () => {
-    const recentFeedback = feedback.slice(0, 12);
+  const formatMemoryData = (mode = 'default') => {
+    const recentFeedback = feedback.slice(0, mode === 'memory' ? 12 : 5);
+    const feedbackExcerptLength = mode === 'memory' ? 700 : 260;
+    const normalizedMemory = normalizeAIMemory(memory);
     const feedbackStats = Object.keys(FEEDBACK_LABELS).reduce((acc, key) => {
       acc[key] = feedback.filter((item) => item.rating === key).length;
       return acc;
@@ -804,7 +892,10 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
       {
         source: '用户在本浏览器保存的 AI 投资记忆、反馈记录和优化总结。',
         generatedAt: new Date().toLocaleString(),
-        profile: normalizeAIMemory(memory),
+        profile: {
+          ...normalizedMemory,
+          learningSummary: compactText(normalizedMemory.learningSummary, mode === 'memory' ? 1400 : 650)
+        },
         feedbackStats,
         recentFeedback: recentFeedback.map((item) => ({
           type: item.type,
@@ -813,7 +904,7 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
           ratingLabel: FEEDBACK_LABELS[item.rating] || item.rating,
           generatedAt: item.generatedAt,
           recommendedCodes: item.recommendedCodes || [],
-          contentExcerpt: String(item.contentExcerpt || '').slice(0, 900)
+          contentExcerpt: compactText(item.contentExcerpt, feedbackExcerptLength)
         })),
         rules: [
           '所有建议都必须优先遵守 profile.customRules、maxSingleBuyAmount、maxSingleBuyRatio 和 cashReserveRatio。',
@@ -905,8 +996,8 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
 
     setLoadingType('memory');
     try {
-      const memoryData = formatMemoryData();
-      const historyData = formatHistoryData();
+      const memoryData = formatMemoryData('memory');
+      const historyData = formatHistoryData('memory');
       const response = await callLLM([
         {
           role: 'system',
@@ -943,11 +1034,11 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
     setLoadingType(type);
 
     try {
-      const holdingsData = formatHoldingsData();
-      const marketData = getMarketData();
+      const holdingsData = formatHoldingsData(type);
+      const marketData = getMarketData(type);
       const cashData = formatAvailableCashData();
-      const historyData = formatHistoryData();
-      const memoryData = formatMemoryData();
+      const historyData = formatHistoryData(type);
+      const memoryData = formatMemoryData(type);
       let prompt;
 
       switch (type) {
@@ -989,6 +1080,8 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
         default:
           throw new Error('不支持的分析类型');
       }
+
+      prompt = compactPrompt(prompt);
 
       const response = await callLLM([
         {
