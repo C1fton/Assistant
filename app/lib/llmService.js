@@ -417,6 +417,9 @@ export const PROMPT_TEMPLATES = {
     '',
     '可用资金快照：',
     '{{cashData}}',
+    '',
+    'AI 记忆与反馈：',
+    '{{memoryData}}',
     ...analysisFrame
   ]),
 
@@ -435,6 +438,9 @@ export const PROMPT_TEMPLATES = {
     '',
     '可用资金快照：',
     '{{cashData}}',
+    '',
+    'AI 记忆与反馈：',
+    '{{memoryData}}',
     '',
     '用户风险偏好：{{riskPreference}}',
     '',
@@ -457,6 +463,9 @@ export const PROMPT_TEMPLATES = {
     '',
     '可用资金快照：',
     '{{cashData}}',
+    '',
+    'AI 记忆与反馈：',
+    '{{memoryData}}',
     ...analysisFrame
   ]),
 
@@ -472,6 +481,9 @@ export const PROMPT_TEMPLATES = {
     '',
     '可用资金快照：',
     '{{cashData}}',
+    '',
+    'AI 记忆与反馈：',
+    '{{memoryData}}',
     '',
     '请把风险映射到具体基金，指出哪只基金今天应该减仓、暂停加仓或仅观察。',
     ...analysisFrame
@@ -494,6 +506,9 @@ export const PROMPT_TEMPLATES = {
     '',
     '可用资金快照：',
     '{{cashData}}',
+    '',
+    'AI 记忆与反馈：',
+    '{{memoryData}}',
     ...analysisFrame
   ]),
 
@@ -517,7 +532,28 @@ export const PROMPT_TEMPLATES = {
     '',
     '可用资金快照：',
     '{{cashData}}',
+    '',
+    'AI 记忆与反馈：',
+    '{{memoryData}}',
     ...analysisFrame
+  ]),
+
+  memoryOptimization: joinPrompt([
+    '你是 AI 投资助手的记忆优化器。你的任务不是给新的买卖建议，而是把用户历史反馈整理成以后生成建议时应该遵守的规则。',
+    '请基于以下 AI 记忆、反馈和历史建议，输出一份可直接作为长期记忆使用的 Markdown 总结。',
+    '',
+    'AI 记忆与反馈：',
+    '{{memoryData}}',
+    '',
+    '历史建议记录：',
+    '{{historyData}}',
+    '',
+    '请按以下结构输出：',
+    '1. 用户偏好画像：总结风险承受、喜欢/回避主题、资金使用习惯。',
+    '2. 已验证有效的建议模式：从有帮助/一般的反馈中提炼。',
+    '3. 需要避免的建议模式：从“不准”的反馈中提炼。',
+    '4. 下一次建议的硬约束：列出 5-8 条规则，例如单笔上限、现金保留、不要重复推荐、触发条件要求。',
+    '5. 仍需用户确认的信息：列出缺口，不要臆造。'
   ])
 };
 

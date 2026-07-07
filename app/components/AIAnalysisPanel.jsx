@@ -161,6 +161,7 @@ const AI_RESULT_DEFAULTS = {
 };
 
 const AI_HISTORY_MAX = 20;
+const AI_FEEDBACK_MAX = 50;
 const AI_RESULTS_VERSION = 'market-opportunity-v2';
 
 const AI_TYPE_LABELS = {
@@ -170,6 +171,25 @@ const AI_TYPE_LABELS = {
   risk: '风险预警',
   rebalance: '调仓建议',
   review: '历史复盘'
+};
+
+const FEEDBACK_LABELS = {
+  useful: '有帮助',
+  partial: '一般',
+  inaccurate: '不准'
+};
+
+const DEFAULT_AI_MEMORY = {
+  investmentGoal: '',
+  preferredThemes: '',
+  avoidedThemes: '',
+  maxSingleBuyAmount: '',
+  maxSingleBuyRatio: '',
+  cashReserveRatio: '',
+  holdingStyle: 'balanced',
+  customRules: '',
+  learningSummary: '',
+  lastOptimizedAt: ''
 };
 
 const getSavedAIResults = () => {
@@ -184,6 +204,35 @@ const getSavedAIResults = () => {
   } catch {
     return null;
   }
+};
+
+const normalizeAIMemory = (value) => ({
+  ...DEFAULT_AI_MEMORY,
+  ...(isObject(value) ? value : {})
+});
+
+const getSavedAIMemory = () => {
+  if (typeof window === 'undefined') return DEFAULT_AI_MEMORY;
+  try {
+    return normalizeAIMemory(storageStore.getItem('ai_user_memory', DEFAULT_AI_MEMORY));
+  } catch {
+    return DEFAULT_AI_MEMORY;
+  }
+};
+
+const getSavedAIFeedback = () => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const saved = storageStore.getItem('ai_feedback_records', []);
+    return isArray(saved) ? saved : [];
+  } catch {
+    return [];
+  }
+};
+
+const extractFundCodesFromText = (text) => {
+  const matches = String(text || '').match(/\b\d{6}\b/g) || [];
+  return Array.from(new Set(matches)).slice(0, 30);
 };
 
 const getSavedAIHistory = () => {
@@ -273,6 +322,8 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
   const [loadingType, setLoadingType] = useState('');
   const [results, setResults] = useState(() => ({ ...AI_RESULT_DEFAULTS, ...(getSavedAIResults() || {}) }));
   const [history, setHistory] = useState(getSavedAIHistory);
+  const [feedback, setFeedback] = useState(getSavedAIFeedback);
+  const [memory, setMemory] = useState(getSavedAIMemory);
   const [riskPreference, setRiskPreference] = useState('moderate');
 
   // 从store获取持仓和基金数据
@@ -341,6 +392,22 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
       // ignore local persistence errors
     }
   }, [history]);
+
+  useEffect(() => {
+    try {
+      storageStore.setItem('ai_feedback_records', JSON.stringify(feedback.slice(0, AI_FEEDBACK_MAX)));
+    } catch {
+      // ignore local persistence errors
+    }
+  }, [feedback]);
+
+  useEffect(() => {
+    try {
+      storageStore.setItem('ai_user_memory', JSON.stringify(normalizeAIMemory(memory)));
+    } catch {
+      // ignore local persistence errors
+    }
+  }, [memory]);
 
   const toNumber = useCallback((value, fallback = null) => {
     const n = Number(value);
@@ -718,8 +785,41 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
           typeLabel: item.typeLabel,
           generatedAt: item.generatedAt,
           snapshot: item.snapshot,
+          recommendedCodes: item.recommendedCodes || [],
           contentExcerpt: String(item.content || '').slice(0, 2200)
         }))
+      },
+      null,
+      2
+    );
+  };
+
+  const formatMemoryData = () => {
+    const recentFeedback = feedback.slice(0, 12);
+    const feedbackStats = Object.keys(FEEDBACK_LABELS).reduce((acc, key) => {
+      acc[key] = feedback.filter((item) => item.rating === key).length;
+      return acc;
+    }, {});
+    return JSON.stringify(
+      {
+        source: '用户在本浏览器保存的 AI 投资记忆、反馈记录和优化总结。',
+        generatedAt: new Date().toLocaleString(),
+        profile: normalizeAIMemory(memory),
+        feedbackStats,
+        recentFeedback: recentFeedback.map((item) => ({
+          type: item.type,
+          typeLabel: item.typeLabel,
+          rating: item.rating,
+          ratingLabel: FEEDBACK_LABELS[item.rating] || item.rating,
+          generatedAt: item.generatedAt,
+          recommendedCodes: item.recommendedCodes || [],
+          contentExcerpt: String(item.contentExcerpt || '').slice(0, 900)
+        })),
+        rules: [
+          '所有建议都必须优先遵守 profile.customRules、maxSingleBuyAmount、maxSingleBuyRatio 和 cashReserveRatio。',
+          '如果 recentFeedback 中某类建议被标记为不准，应降低同类建议置信度并说明原因。',
+          '如果 learningSummary 存在，应把它作为下一次输出风格和筛选逻辑的优先约束。'
+        ]
       },
       null,
       2
@@ -732,6 +832,7 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
       type,
       typeLabel: AI_TYPE_LABELS[type] || type,
       generatedAt: new Date().toLocaleString(),
+      recommendedCodes: extractFundCodesFromText(content),
       snapshot: {
         fundCount: funds.length,
         holdingCount: Object.keys(isObject(holdings) ? holdings : {}).length,
@@ -742,6 +843,92 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
       content
     };
     setHistory((prev) => [record, ...(isArray(prev) ? prev : [])].slice(0, AI_HISTORY_MAX));
+  };
+
+  const handleFeedback = (type, rating) => {
+    const content = results[type];
+    if (!content) return;
+    const record = {
+      id: `${Date.now()}-${type}-${rating}`,
+      type,
+      typeLabel: AI_TYPE_LABELS[type] || type,
+      rating,
+      ratingLabel: FEEDBACK_LABELS[rating] || rating,
+      generatedAt: new Date().toLocaleString(),
+      recommendedCodes: extractFundCodesFromText(content),
+      snapshot: {
+        marketTemperature: marketInsights.temperatureLabel,
+        marketTemperatureScore: marketInsights.temperatureScore,
+        availableCash: toNumber(availableCash, 0) || 0
+      },
+      contentExcerpt: String(content || '').slice(0, 1600)
+    };
+    setFeedback((prev) => [record, ...(isArray(prev) ? prev : [])].slice(0, AI_FEEDBACK_MAX));
+    toast.success(`已记录反馈：${FEEDBACK_LABELS[rating] || rating}`);
+  };
+
+  const renderResultWithFeedback = (type, content, emptyText) => (
+    <>
+      <AnalysisResult content={content} emptyText={emptyText} />
+      {content ? (
+        <div className="ai-feedback-actions">
+          <span>这次建议对你有帮助吗？</span>
+          <Button type="button" variant="outline" size="sm" onClick={() => handleFeedback(type, 'useful')}>
+            有帮助
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => handleFeedback(type, 'partial')}>
+            一般
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => handleFeedback(type, 'inaccurate')}>
+            不准
+          </Button>
+        </div>
+      ) : null}
+    </>
+  );
+
+  const updateMemoryField = (field, value) => {
+    setMemory((prev) => ({ ...normalizeAIMemory(prev), [field]: value }));
+  };
+
+  const handleOptimizeMemory = async () => {
+    const apiKey = storageStore.getItem('llm_api_key');
+    if (!apiKey) {
+      toast.error('请先配置LLM API密钥');
+      useModalStore.setState({ llmSettingOpen: true });
+      return;
+    }
+    if (history.length === 0 && feedback.length === 0) {
+      toast.error('还没有历史建议或反馈，先生成几次分析再优化记忆');
+      return;
+    }
+
+    setLoadingType('memory');
+    try {
+      const memoryData = formatMemoryData();
+      const historyData = formatHistoryData();
+      const response = await callLLM([
+        {
+          role: 'system',
+          content:
+            '你是基金投资助手的记忆管理器。你的任务是从用户反馈和历史建议中提炼可复用偏好、错误教训和下一次建议约束。不要给新的买卖建议。'
+        },
+        {
+          role: 'user',
+          content: renderPrompt(PROMPT_TEMPLATES.memoryOptimization, { memoryData, historyData })
+        }
+      ]);
+      setMemory((prev) => ({
+        ...normalizeAIMemory(prev),
+        learningSummary: response,
+        lastOptimizedAt: new Date().toLocaleString()
+      }));
+      toast.success('AI 记忆已优化');
+    } catch (error) {
+      toast.error('优化失败: ' + error.message);
+    } finally {
+      setLoadingType('');
+    }
   };
 
   // 执行分析
@@ -760,17 +947,19 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
       const marketData = getMarketData();
       const cashData = formatAvailableCashData();
       const historyData = formatHistoryData();
+      const memoryData = formatMemoryData();
       let prompt;
 
       switch (type) {
         case 'analysis':
-          prompt = renderPrompt(PROMPT_TEMPLATES.holdingAnalysis, { holdingsData, cashData });
+          prompt = renderPrompt(PROMPT_TEMPLATES.holdingAnalysis, { holdingsData, cashData, memoryData });
           break;
         case 'recommendation':
           prompt = renderPrompt(PROMPT_TEMPLATES.fundRecommendation, {
             holdingsData,
             marketData,
             cashData,
+            memoryData,
             riskPreference:
               riskPreference === 'conservative'
                 ? '保守型：追求稳健收益，风险承受能力低'
@@ -780,16 +969,22 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
           });
           break;
         case 'market':
-          prompt = renderPrompt(PROMPT_TEMPLATES.marketAnalysis, { marketData, cashData });
+          prompt = renderPrompt(PROMPT_TEMPLATES.marketAnalysis, { marketData, cashData, memoryData });
           break;
         case 'risk':
-          prompt = renderPrompt(PROMPT_TEMPLATES.riskWarning, { holdingsData, marketData, cashData });
+          prompt = renderPrompt(PROMPT_TEMPLATES.riskWarning, { holdingsData, marketData, cashData, memoryData });
           break;
         case 'rebalance':
-          prompt = renderPrompt(PROMPT_TEMPLATES.rebalanceAdvice, { holdingsData, marketData, cashData });
+          prompt = renderPrompt(PROMPT_TEMPLATES.rebalanceAdvice, { holdingsData, marketData, cashData, memoryData });
           break;
         case 'review':
-          prompt = renderPrompt(PROMPT_TEMPLATES.historyReview, { holdingsData, marketData, cashData, historyData });
+          prompt = renderPrompt(PROMPT_TEMPLATES.historyReview, {
+            holdingsData,
+            marketData,
+            cashData,
+            memoryData,
+            historyData
+          });
           break;
         default:
           throw new Error('不支持的分析类型');
@@ -799,7 +994,7 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
         {
           role: 'system',
           content:
-            '你是专业的基金投资分析助手。必须基于输入数据给出逐基金、可执行、条件化的操作建议；所有买入/加仓建议必须受 cashBudget/availableCash 约束；不要承诺收益，不要编造输入中没有的数据。'
+            '你是专业的基金投资分析助手。必须基于输入数据给出逐基金、可执行、条件化的操作建议；所有买入/加仓建议必须受 cashBudget/availableCash 和 aiMemory 约束；不要承诺收益，不要编造输入中没有的数据。'
         },
         { role: 'user', content: prompt }
       ]);
@@ -828,7 +1023,7 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 overflow-hidden flex flex-col">
-          <TabsList className="grid grid-cols-6 mb-4">
+          <TabsList className="grid grid-cols-7 mb-4">
             <TabsTrigger value="analysis" className="flex items-center gap-2">
               <TrendingUp className="h-4 w-4" />
               <span className="hidden sm:inline">持仓分析</span>
@@ -853,6 +1048,10 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
               <History className="h-4 w-4" />
               <span className="hidden sm:inline">复盘</span>
             </TabsTrigger>
+            <TabsTrigger value="memory" className="flex items-center gap-2">
+              <Brain className="h-4 w-4" />
+              <span className="hidden sm:inline">记忆</span>
+            </TabsTrigger>
           </TabsList>
 
           <div className="flex-1 overflow-y-auto">
@@ -867,7 +1066,7 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
                     {loadingType === 'analysis' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                     开始分析
                   </Button>
-                  <AnalysisResult content={results.analysis} />
+                  {renderResultWithFeedback('analysis', results.analysis)}
                 </div>
               </div>
             </TabsContent>
@@ -898,7 +1097,7 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
                     {loadingType === 'recommendation' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                     获取推荐
                   </Button>
-                  <AnalysisResult content={results.recommendation} />
+                  {renderResultWithFeedback('recommendation', results.recommendation)}
                 </div>
               </div>
             </TabsContent>
@@ -914,7 +1113,7 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
                     {loadingType === 'market' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                     查看分析
                   </Button>
-                  <AnalysisResult content={results.market} />
+                  {renderResultWithFeedback('market', results.market)}
                 </div>
               </div>
             </TabsContent>
@@ -930,7 +1129,7 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
                     {loadingType === 'risk' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                     风险检测
                   </Button>
-                  <AnalysisResult content={results.risk} />
+                  {renderResultWithFeedback('risk', results.risk)}
                 </div>
               </div>
             </TabsContent>
@@ -946,7 +1145,7 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
                     {loadingType === 'rebalance' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                     获取建议
                   </Button>
-                  <AnalysisResult content={results.rebalance} />
+                  {renderResultWithFeedback('rebalance', results.rebalance)}
                 </div>
               </div>
             </TabsContent>
@@ -972,10 +1171,11 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
                       清空历史
                     </Button>
                   </div>
-                  <AnalysisResult
-                    content={results.review}
-                    emptyText="生成过 AI 分析后，这里会保存历史记录并支持复盘。"
-                  />
+                  {renderResultWithFeedback(
+                    'review',
+                    results.review,
+                    '生成过 AI 分析后，这里会保存历史记录并支持复盘。'
+                  )}
                   <div className="ai-history-list">
                     {history.length === 0 ? (
                       <div className="ai-report-empty">暂无历史建议。先在其他页签生成一次分析。</div>
@@ -996,6 +1196,157 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
                         </details>
                       ))
                     )}
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="memory" className="h-full mt-0">
+              <div className="ai-analysis-card">
+                <div className="ai-analysis-card-header">
+                  <h3 className="ai-analysis-card-title">AI 记忆与自我优化</h3>
+                  <p className="ai-analysis-card-description">
+                    保存你的投资偏好和反馈，让后续建议自动贴合你的风格与约束
+                  </p>
+                </div>
+                <div className="ai-analysis-card-content">
+                  <div className="ai-memory-grid">
+                    <label className="ai-memory-field ai-memory-field-wide">
+                      <span>投资目标</span>
+                      <textarea
+                        value={memory.investmentGoal}
+                        onChange={(event) => updateMemoryField('investmentGoal', event.target.value)}
+                        placeholder="例如：稳健增值、控制回撤，优先长期持有；或短线捕捉主题机会。"
+                      />
+                    </label>
+
+                    <label className="ai-memory-field">
+                      <span>偏好主题</span>
+                      <input
+                        value={memory.preferredThemes}
+                        onChange={(event) => updateMemoryField('preferredThemes', event.target.value)}
+                        placeholder="AI、半导体、红利、医药..."
+                      />
+                    </label>
+
+                    <label className="ai-memory-field">
+                      <span>回避主题</span>
+                      <input
+                        value={memory.avoidedThemes}
+                        onChange={(event) => updateMemoryField('avoidedThemes', event.target.value)}
+                        placeholder="不想碰的板块或基金类型"
+                      />
+                    </label>
+
+                    <label className="ai-memory-field">
+                      <span>单笔金额上限</span>
+                      <input
+                        inputMode="decimal"
+                        value={memory.maxSingleBuyAmount}
+                        onChange={(event) => updateMemoryField('maxSingleBuyAmount', event.target.value)}
+                        placeholder="例如 500"
+                      />
+                    </label>
+
+                    <label className="ai-memory-field">
+                      <span>单笔仓位上限</span>
+                      <input
+                        inputMode="decimal"
+                        value={memory.maxSingleBuyRatio}
+                        onChange={(event) => updateMemoryField('maxSingleBuyRatio', event.target.value)}
+                        placeholder="例如 2%"
+                      />
+                    </label>
+
+                    <label className="ai-memory-field">
+                      <span>现金保留比例</span>
+                      <input
+                        inputMode="decimal"
+                        value={memory.cashReserveRatio}
+                        onChange={(event) => updateMemoryField('cashReserveRatio', event.target.value)}
+                        placeholder="例如 30%"
+                      />
+                    </label>
+
+                    <label className="ai-memory-field">
+                      <span>持仓风格</span>
+                      <Select
+                        value={memory.holdingStyle}
+                        onValueChange={(value) => updateMemoryField('holdingStyle', value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="defensive">防守型</SelectItem>
+                          <SelectItem value="balanced">均衡型</SelectItem>
+                          <SelectItem value="aggressive">进攻型</SelectItem>
+                          <SelectItem value="rotation">主题轮动</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </label>
+
+                    <label className="ai-memory-field ai-memory-field-wide">
+                      <span>自定义规则</span>
+                      <textarea
+                        value={memory.customRules}
+                        onChange={(event) => updateMemoryField('customRules', event.target.value)}
+                        placeholder="例如：不要推荐重复美股科技 QDII；亏损超过 8% 才考虑补仓；不要一天给超过 3 只建仓建议。"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="ai-memory-actions">
+                    <Button type="button" onClick={handleOptimizeMemory} disabled={!!loadingType}>
+                      {loadingType === 'memory' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                      优化记忆
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={feedback.length === 0}
+                      onClick={() => setFeedback([])}
+                    >
+                      清空反馈
+                    </Button>
+                  </div>
+
+                  <div className="ai-memory-panels">
+                    <div className="ai-memory-panel">
+                      <div className="ai-memory-panel-title">
+                        学习总结
+                        {memory.lastOptimizedAt ? <span>{memory.lastOptimizedAt}</span> : null}
+                      </div>
+                      {memory.learningSummary ? (
+                        <MarkdownReport content={memory.learningSummary} />
+                      ) : (
+                        <div className="ai-report-empty">记录几次反馈后，点击“优化记忆”生成你的个性化规则。</div>
+                      )}
+                    </div>
+                    <div className="ai-memory-panel">
+                      <div className="ai-memory-panel-title">
+                        反馈记录
+                        <span>{feedback.length} 条</span>
+                      </div>
+                      {feedback.length === 0 ? (
+                        <div className="ai-report-empty">
+                          暂无反馈。你可以在每次 AI 输出下方标记有帮助、一般或不准。
+                        </div>
+                      ) : (
+                        <div className="ai-feedback-list">
+                          {feedback.slice(0, 8).map((item) => (
+                            <div className="ai-feedback-item" key={item.id}>
+                              <span>{item.typeLabel}</span>
+                              <strong>{item.ratingLabel}</strong>
+                              <span>{item.generatedAt}</span>
+                              {item.recommendedCodes?.length ? (
+                                <em>{item.recommendedCodes.slice(0, 5).join(', ')}</em>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
