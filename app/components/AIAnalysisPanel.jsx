@@ -190,6 +190,46 @@ const getSavedAIHistory = () => {
   }
 };
 
+const readFirstField = (item, keys) => {
+  if (!isObject(item)) return '';
+  for (const key of keys) {
+    const value = item[key];
+    if (value !== null && value !== undefined && value !== '') return value;
+  }
+  return '';
+};
+
+const normalizeCandidateFund = (item, source, rank, toNumber) => {
+  if (!isObject(item)) return null;
+  const code = String(
+    readFirstField(item, ['code', 'fundCode', 'fundcode', 'FCODE', 'fcode', '基金代码', 'bzdm'])
+  ).trim();
+  const name = String(
+    readFirstField(item, ['name', 'fundName', 'SHORTNAME', 'shortname', 'FNAME', '基金简称', '简称'])
+  ).trim();
+
+  if (!/^\d{6}$/.test(code) || !name) return null;
+
+  return {
+    code,
+    name,
+    source,
+    rank,
+    type: item?.type || '',
+    theme: item?.theme || item?.tags || '',
+    isHeld: !!item?.isHeld,
+    holdingAmount: toNumber(item?.holdingAmount ?? item?.amountHint, null),
+    currentNav: toNumber(readFirstField(item, ['currentNav', 'GSZ', 'gsz', 'NAV', 'DWJZ', 'dwjz']), null),
+    estimatedChangePercent: toNumber(
+      readFirstField(item, ['estimatedChangePercent', 'GSZZL', 'gszzl', 'changePercent', 'zdf', '涨跌幅']),
+      null
+    ),
+    previousDayChangePercent: toNumber(readFirstField(item, ['previousDayChangePercent', 'ZZL', 'zzl']), null),
+    heatSignal: readFirstField(item, ['heat', 'HOT', 'SCORE', 'followCount', 'fundHeat']) || '',
+    dataDate: readFirstField(item, ['netValueDate', 'PDATE', 'jzrq', 'date']) || ''
+  };
+};
+
 /**
  * 智能分析主组件
  */
@@ -221,6 +261,7 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
   const holdings = useStorageStore((state) => state.holdings);
   const funds = useStorageStore((state) => state.funds);
   const groups = useStorageStore((state) => state.groups);
+  const availableCash = useStorageStore((state) => state.availableCash);
 
   const { data: marketSectors } = useQuery({
     queryKey: ['ai-market-sectors'],
@@ -308,6 +349,44 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
       50 + avgFundChange * 7 + avgSectorChange * 5 + (sectorBreadth - 0.5) * 35 + (fundBreadth - 0.5) * 25;
     const temperatureScore = Math.max(0, Math.min(100, Math.round(rawScore)));
     const temperatureLabel = temperatureScore >= 72 ? '偏热/进攻' : temperatureScore <= 38 ? '偏冷/防守' : '中性/震荡';
+    const trackedCandidates = funds
+      .map((fund, index) =>
+        normalizeCandidateFund(
+          {
+            ...fund,
+            isHeld: !!holdings?.[fund?.code],
+            holdingAmount: holdings?.[fund?.code]?.amount || null,
+            currentNav: getCurrentNav(fund),
+            estimatedChangePercent: fund?.noValuation ? null : toNumber(fund?.gszzl),
+            previousDayChangePercent: toNumber(fund?.zzl),
+            changePercent: getChangePercent(fund),
+            netValueDate: fund?.jzrq || ''
+          },
+          'current_page_fund',
+          index + 1,
+          toNumber
+        )
+      )
+      .filter(Boolean);
+    const rankingCandidates = rankingList
+      .map((item, index) => normalizeCandidateFund(item, 'valuation_ranking_hot', index + 1, toNumber))
+      .filter(Boolean);
+    const candidateMap = new Map();
+    [...trackedCandidates, ...rankingCandidates].forEach((item) => {
+      const existed = candidateMap.get(item.code);
+      candidateMap.set(
+        item.code,
+        existed
+          ? {
+              ...existed,
+              ...item,
+              source: `${existed.source},${item.source}`,
+              isHeld: existed.isHeld || item.isHeld,
+              holdingAmount: existed.holdingAmount ?? item.holdingAmount
+            }
+          : item
+      );
+    });
 
     return {
       generatedAt: new Date().toLocaleString(),
@@ -332,9 +411,38 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
         .slice(0, 8),
       weakSectors: [...sectorChanges].sort((a, b) => Number(a.change_pct || 0) - Number(b.change_pct || 0)).slice(0, 8),
       inflowSectors: [...sectorList].sort((a, b) => Number(b.net_inflow || 0) - Number(a.net_inflow || 0)).slice(0, 8),
-      valuationLeaders: rankingList.slice(0, 12)
+      valuationLeaders: rankingCandidates.slice(0, 12),
+      recommendationCandidatePool: Array.from(candidateMap.values()).slice(0, 60)
     };
-  }, [funds, getChangePercent, holdings, marketSectors, valuationRanking]);
+  }, [funds, getChangePercent, getCurrentNav, holdings, marketSectors, toNumber, valuationRanking]);
+
+  const buildCashBudget = (portfolioAmount = 0) => {
+    const cash = toNumber(availableCash, 0) || 0;
+    const portfolio = toNumber(portfolioAmount, 0) || 0;
+    const totalLiquidAsset = portfolio + cash;
+    return {
+      source: '首页“流动可使用资金”卡片',
+      availableCash: Number(cash.toFixed(2)),
+      availableCashText: cash > 0 ? `${cash.toFixed(2)} 元` : '未填写或为 0',
+      portfolioAmount: Number(portfolio.toFixed(2)),
+      totalLiquidAsset: Number(totalLiquidAsset.toFixed(2)),
+      cashRatioToPortfolio: portfolio > 0 ? Number(((cash / portfolio) * 100).toFixed(2)) : null,
+      cashRatioToTotalLiquidAsset: totalLiquidAsset > 0 ? Number(((cash / totalLiquidAsset) * 100).toFixed(2)) : null,
+      decisionConstraints:
+        cash > 0
+          ? [
+              '所有新增建仓/加仓金额总和不得超过 availableCash',
+              '单只基金的建议金额必须给出区间或上限',
+              '如果市场温度偏热，优先保留部分现金等待回撤'
+            ]
+          : [
+              '用户未填写可用现金或可用现金为 0，不应给出新增买入金额',
+              '如需优化，只能建议观察、减仓、换仓或等待现金补充'
+            ]
+    };
+  };
+
+  const formatAvailableCashData = (portfolioAmount = 0) => JSON.stringify(buildCashBudget(portfolioAmount), null, 2);
 
   // 格式化持仓数据，传给LLM
   const formatHoldingsData = () => {
@@ -433,6 +541,7 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
         source: '当前页面本地持仓 + 当前已加载基金估值/净值数据',
         generatedAt: new Date().toLocaleString(),
         totalAmount: Number(totalAmount.toFixed(2)),
+        cashBudget: buildCashBudget(totalAmount),
         fundCount: holdingList.length,
         groupCount: groups.length,
         exposureSummary: {
@@ -481,6 +590,11 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
       {
         source: '当前页面已加载基金估值/净值数据 + 行情页板块/估值榜静态兜底数据；不含外部新闻抓取',
         generatedAt: new Date().toLocaleString(),
+        dataLimitations: [
+          '当前版本未接入实时新闻 API；消息面只能基于输入中的板块、热度、资金流和涨跌信号推断',
+          '推荐基金代码/名称只能来自 recommendationCandidatePool 或当前持仓/关注列表，不允许编造'
+        ],
+        cashBudget: buildCashBudget(),
         marketTemperature: marketInsights,
         fundCount: funds.length,
         valuedFundCount: changedFunds.length,
@@ -490,6 +604,7 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
         topRisers,
         topFallers,
         highVolatility,
+        recommendationCandidatePool: marketInsights.recommendationCandidatePool,
         allFunds: fundSnapshot.slice(0, 80)
       },
       null,
@@ -526,7 +641,8 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
         fundCount: funds.length,
         holdingCount: Object.keys(isObject(holdings) ? holdings : {}).length,
         marketTemperature: marketInsights.temperatureLabel,
-        marketTemperatureScore: marketInsights.temperatureScore
+        marketTemperatureScore: marketInsights.temperatureScore,
+        availableCash: toNumber(availableCash, 0) || 0
       },
       content
     };
@@ -547,16 +663,19 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
     try {
       const holdingsData = formatHoldingsData();
       const marketData = getMarketData();
+      const cashData = formatAvailableCashData();
       const historyData = formatHistoryData();
       let prompt;
 
       switch (type) {
         case 'analysis':
-          prompt = renderPrompt(PROMPT_TEMPLATES.holdingAnalysis, { holdingsData });
+          prompt = renderPrompt(PROMPT_TEMPLATES.holdingAnalysis, { holdingsData, cashData });
           break;
         case 'recommendation':
           prompt = renderPrompt(PROMPT_TEMPLATES.fundRecommendation, {
             holdingsData,
+            marketData,
+            cashData,
             riskPreference:
               riskPreference === 'conservative'
                 ? '保守型：追求稳健收益，风险承受能力低'
@@ -566,16 +685,16 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
           });
           break;
         case 'market':
-          prompt = renderPrompt(PROMPT_TEMPLATES.marketAnalysis, { marketData });
+          prompt = renderPrompt(PROMPT_TEMPLATES.marketAnalysis, { marketData, cashData });
           break;
         case 'risk':
-          prompt = renderPrompt(PROMPT_TEMPLATES.riskWarning, { holdingsData, marketData });
+          prompt = renderPrompt(PROMPT_TEMPLATES.riskWarning, { holdingsData, marketData, cashData });
           break;
         case 'rebalance':
-          prompt = renderPrompt(PROMPT_TEMPLATES.rebalanceAdvice, { holdingsData, marketData });
+          prompt = renderPrompt(PROMPT_TEMPLATES.rebalanceAdvice, { holdingsData, marketData, cashData });
           break;
         case 'review':
-          prompt = renderPrompt(PROMPT_TEMPLATES.historyReview, { holdingsData, marketData, historyData });
+          prompt = renderPrompt(PROMPT_TEMPLATES.historyReview, { holdingsData, marketData, cashData, historyData });
           break;
         default:
           throw new Error('不支持的分析类型');
@@ -585,7 +704,7 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
         {
           role: 'system',
           content:
-            '你是专业的基金投资分析助手。必须基于输入数据给出逐基金、可执行、条件化的操作建议；不要承诺收益，不要编造输入中没有的数据。'
+            '你是专业的基金投资分析助手。必须基于输入数据给出逐基金、可执行、条件化的操作建议；所有买入/加仓建议必须受 cashBudget/availableCash 约束；不要承诺收益，不要编造输入中没有的数据。'
         },
         { role: 'user', content: prompt }
       ]);
@@ -662,7 +781,9 @@ export const AIAnalysisPanel = ({ open, onOpenChange }) => {
               <div className="ai-analysis-card">
                 <div className="ai-analysis-card-header">
                   <h3 className="ai-analysis-card-title">个性化基金推荐</h3>
-                  <p className="ai-analysis-card-description">根据你的风险偏好和当前持仓，推荐合适的优质基金</p>
+                  <p className="ai-analysis-card-description">
+                    扫描市场热度、板块资金流和估值榜候选基金，输出可执行建仓方案
+                  </p>
                 </div>
                 <div className="ai-analysis-card-content">
                   <div className="mb-4 flex items-center gap-4">

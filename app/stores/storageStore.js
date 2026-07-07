@@ -91,6 +91,7 @@ const SYNC_KEYS = new Set([
   'pendingTrades',
   'transactions',
   'dcaPlans',
+  'availableCash',
   'customSettings',
   'fundDailyEarnings',
   'fundDividends'
@@ -126,6 +127,11 @@ const normalizeStorageValue = (key, value) => {
   }
 };
 
+const normalizeAvailableCash = (value) => {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? Number(n.toFixed(2)) : 0;
+};
+
 /**
  * 管理 localStorage 数据的 Zustand Store
  */
@@ -149,6 +155,7 @@ export const useStorageStore = create((set, get) => ({
   pendingTrades: [],
   transactions: {},
   dcaPlans: {},
+  availableCash: 0,
   customSettings: {},
   fundDailyEarnings: {},
   fundDividends: {},
@@ -222,6 +229,12 @@ export const useStorageStore = create((set, get) => ({
   initDcaPlans: () => {
     if (typeof window !== 'undefined') {
       set({ dcaPlans: get().getItem('dcaPlans', {}) });
+    }
+  },
+
+  initAvailableCash: () => {
+    if (typeof window !== 'undefined') {
+      set({ availableCash: normalizeAvailableCash(get().getItem('availableCash', 0)) });
     }
   },
 
@@ -417,6 +430,14 @@ export const useStorageStore = create((set, get) => ({
     get().setItem('dcaPlans', JSON.stringify(next));
   },
 
+  setAvailableCash: (nextAvailableCash) => {
+    const next = normalizeAvailableCash(
+      isFunction(nextAvailableCash) ? nextAvailableCash(get().availableCash) : nextAvailableCash
+    );
+    set({ availableCash: next });
+    get().setItem('availableCash', String(next));
+  },
+
   setCustomSettings: (nextCustomSettings) => {
     const next = isFunction(nextCustomSettings) ? nextCustomSettings(get().customSettings) : nextCustomSettings;
     set({ customSettings: next });
@@ -539,6 +560,7 @@ export const useStorageStore = create((set, get) => ({
       else if (key === 'pendingTrades') set({ pendingTrades: parsed });
       else if (key === 'transactions') set({ transactions: parsed });
       else if (key === 'dcaPlans') set({ dcaPlans: parsed });
+      else if (key === 'availableCash') set({ availableCash: normalizeAvailableCash(parsed) });
       else if (key === 'customSettings') set({ customSettings: parsed });
       else if (key === 'fundDailyEarnings') set({ fundDailyEarnings: parsed });
       else if (key === 'fundDividends') set({ fundDividends: parsed });
@@ -549,6 +571,7 @@ export const useStorageStore = create((set, get) => ({
       if (key === 'refreshMs') set({ refreshMs: Number(normalizedValue) });
       else if (key === 'localSortBy') set({ sortBy: normalizedValue });
       else if (key === 'localSortOrder') set({ sortOrder: normalizedValue });
+      else if (key === 'availableCash') set({ availableCash: normalizeAvailableCash(normalizedValue) });
     }
 
     if (skipStorageWrite) return;

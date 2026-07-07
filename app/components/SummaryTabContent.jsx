@@ -3,6 +3,7 @@
 import React from 'react';
 import GroupSummary from './GroupSummary';
 import GroupAccountSummaryCard from './GroupAccountSummaryCard';
+import AvailableCashCard from './AvailableCashCard';
 import { SUMMARY_TAB_ID, SUMMARY_SOURCE_GLOBAL } from '@/app/constants';
 
 export default function SummaryTabContent({
@@ -40,11 +41,12 @@ export default function SummaryTabContent({
         shouldShowMarketIndex={shouldShowMarketIndex}
         navbarHeight={navbarHeight}
       />
+      <AvailableCashCard className="available-cash-home-card" />
       {summaryCardItems.length > 0 && (
         <div
           className="grid"
           style={{
-            marginTop: isGroupSummarySticky ? 50 : 10,
+            marginTop: isGroupSummarySticky ? 20 : 10,
             gridColumn: 'span 12',
             gap: isMobile ? 10 : 16
           }}

@@ -2146,6 +2146,107 @@ html::-webkit-scrollbar-thumb:active,
   margin-bottom: 16px;
 }
 
+.available-cash-card {
+  margin: 0 0 10px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.available-cash-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.available-cash-icon {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: var(--primary);
+  background: rgba(34, 211, 238, 0.1);
+  border: 1px solid rgba(34, 211, 238, 0.18);
+  flex: 0 0 auto;
+}
+
+.available-cash-copy {
+  min-width: 0;
+}
+
+.available-cash-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.available-cash-value {
+  margin-top: 2px;
+  color: var(--foreground);
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.available-cash-note {
+  margin-top: 2px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.available-cash-editor {
+  height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.32);
+  flex: 0 0 220px;
+}
+
+.available-cash-prefix {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.available-cash-input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--foreground);
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.available-cash-input::placeholder {
+  color: var(--muted);
+}
+
+.available-cash-save {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 8px;
+  color: #05263b;
+  background: var(--primary);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
 @media (max-width: 640px) {
   .filter-bar {
     position: sticky;
@@ -2182,6 +2283,22 @@ html::-webkit-scrollbar-thumb:active,
 
   .group-summary-sticky .group-summary-card {
     margin-bottom: 0;
+  }
+
+  .available-cash-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .available-cash-editor {
+    flex-basis: auto;
+    width: 100%;
+  }
+
+  .available-cash-input {
+    font-size: 16px;
   }
 }
 

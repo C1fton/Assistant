@@ -6,6 +6,7 @@ import SearchBar from './components/SearchBar';
 import SummaryTabContent from './components/SummaryTabContent';
 import FundListView from './components/FundListView';
 import NavLayout from './components/NavLayout';
+import AvailableCashCard from './components/AvailableCashCard';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Image from 'next/image';
@@ -152,6 +153,7 @@ export default function HomePage() {
     initPendingTrades,
     initTransactions,
     initDcaPlans,
+    initAvailableCash,
     initCustomSettings,
     initFundDailyEarnings,
     initFundDividends,
@@ -2634,6 +2636,7 @@ export default function HomePage() {
       initPendingTrades();
       initTransactions();
       initDcaPlans();
+      initAvailableCash();
       initCustomSettings();
       initFundDailyEarnings();
       initFundDividends();
@@ -5098,6 +5101,7 @@ export default function HomePage() {
                         navbarHeight={navbarHeight}
                       />
                     )}
+                    {currentTab !== SUMMARY_TAB_ID && <AvailableCashCard className="available-cash-home-card" />}
                     {currentTab !== SUMMARY_TAB_ID && (
                       <>
                         {shouldShowGroupFundSearch && (

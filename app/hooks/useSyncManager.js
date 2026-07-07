@@ -340,6 +340,7 @@ export function useSyncManager({ showToast, refreshAllRef, setTempSeconds, setFu
       });
 
     const customSettings = isPlainObject(payload.customSettings) ? payload.customSettings : {};
+    const availableCash = normalizeNumber(payload.availableCash) ?? 0;
     const fundDailyEarningsSource = normalizeFundDailyEarningsScoped(payload.fundDailyEarnings);
     const fundDailyEarningsSig = Object.keys(fundDailyEarningsSource)
       .sort()
@@ -386,6 +387,7 @@ export function useSyncManager({ showToast, refreshAllRef, setTempSeconds, setFu
       pendingTrades,
       transactions,
       dcaPlans,
+      availableCash,
       customSettings,
       fundDailyEarningsSig
     });
@@ -436,6 +438,9 @@ export function useSyncManager({ showToast, refreshAllRef, setTempSeconds, setFu
       }
       if (!keys || keys.has('dcaPlans')) {
         all.dcaPlans = storageStore.getItem('dcaPlans', {});
+      }
+      if (!keys || keys.has('availableCash')) {
+        all.availableCash = storageStore.getItem('availableCash', 0);
       }
       if (!keys || keys.has('customSettings')) {
         all.customSettings = storageStore.getItem('customSettings', {});
@@ -613,6 +618,7 @@ export function useSyncManager({ showToast, refreshAllRef, setTempSeconds, setFu
           pendingTrades: all.pendingTrades,
           transactions: all.transactions,
           dcaPlans: cleanedDcaPlans,
+          availableCash: normalizeNumber(all.availableCash) ?? 0,
           customSettings: isPlainObject(all.customSettings) ? all.customSettings : {},
           fundDailyEarnings: cleanedFundDailyEarnings,
           fundValuationTimeseries: isPlainObject(all.fundValuationTimeseries) ? all.fundValuationTimeseries : {},
@@ -653,6 +659,7 @@ export function useSyncManager({ showToast, refreshAllRef, setTempSeconds, setFu
         pendingTrades: [],
         transactions: {},
         dcaPlans: { [DCA_SCOPE_GLOBAL]: {} },
+        availableCash: 0,
         customSettings: {},
         exportedAt: nowInTz().toISOString()
       };
@@ -877,6 +884,7 @@ export function useSyncManager({ showToast, refreshAllRef, setTempSeconds, setFu
       'groupHoldings',
       'pendingTrades',
       'dcaPlans',
+      'availableCash',
       'customSettings',
       'fundDailyEarnings'
     ]);
@@ -1077,6 +1085,10 @@ export function useSyncManager({ showToast, refreshAllRef, setTempSeconds, setFu
             const localDca = storageStore.getItem('dcaPlans', {});
             useStorageStore.getState().setDcaPlans(migrateDcaPlansToScoped(isPlainObject(localDca) ? localDca : {}));
           } catch {}
+        }
+
+        if (hasOwn(cloudData, 'availableCash')) {
+          useStorageStore.getState().setAvailableCash(normalizeNumber(cloudData.availableCash) ?? 0);
         }
 
         const cloudDaily = normalizeFundDailyEarningsScoped(cloudData.fundDailyEarnings);
